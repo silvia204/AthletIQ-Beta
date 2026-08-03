@@ -1,0 +1,20 @@
+# Secrets
+.streamlit/secrets.toml
+google_key.json
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Virtuelle Umgebung
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Betriebssystem
+.DS_Store
+Thumbs.db
