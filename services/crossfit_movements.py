@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, Any
 
 
 # ============================================================================
@@ -38,6 +38,26 @@ class MovementCategory(str, Enum):
     GYMNASTICS = "Gymnastics"
     MONOSTRUCTURAL = "Monostructural"
     FUNCTIONAL = "Functional"
+
+class MovementPattern(str, Enum):
+   # Lower Body
+    SQUAT = "Squat"
+    HINGE = "Hinge"
+    LUNGE = "Lunge"
+
+    # Upper Body
+    HORIZONTAL_PUSH = "Horizontal Push"
+    HORIZONTAL_PULL = "Horizontal Pull"
+    VERTICAL_PUSH = "Vertical Push"
+    VERTICAL_PULL = "Vertical Pull"
+
+    # Trunk
+    ROTATION = "Rotation"
+    CORE_FLEXION = "Core Flexion"
+
+    # Functional
+    CARRY = "Carry"
+    LOCOMOTION = "Locomotion"
 
 
 # ============================================================================
@@ -73,6 +93,8 @@ class CrossFitMovement:
     variants: Tuple[str, ...]
 
     aliases: Tuple[str, ...]
+
+    movement_patterns: Tuple[MovementPattern, ...] = ()
 
     notes: str = ""
 
@@ -115,11 +137,19 @@ def normalize_name(text: str) -> str:
     Power-Clean
     power clean
     POWER CLEAN
+    Deadlifts
+    Burpees
+    Pull-Ups
 
     →
 
     power clean
+    deadlift
+    burpee
+    pull up
     """
+
+    import re
 
     text = text.lower().strip()
 
@@ -127,7 +157,9 @@ def normalize_name(text: str) -> str:
         "-": " ",
         "_": " ",
         "&": "and",
-        "  ": " ",
+        "(": " ",
+        ")": " ",
+        ",": " ",
     }
 
     for old, new in replacements.items():
@@ -136,7 +168,43 @@ def normalize_name(text: str) -> str:
     while "  " in text:
         text = text.replace("  ", " ")
 
-    return text
+    # Führende Zahlen entfernen
+    # 10 Burpees -> Burpees
+    # 250m Row -> Row
+    text = re.sub(
+        r"^\d+\s*x\s*\d+\s*",
+        "",
+        text,
+    )
+
+    text = re.sub(
+        r"^\d+(?:/\d+)?\s*(?:kg|lb|m|km|cal|cals|sec|s|min)?\s+",
+        "",
+        text,
+    )
+
+    # Distanzangaben vor Monostructural-Movements entfernen
+    text = re.sub(
+        r"^\d+(?:\.\d+)?\s*(?:m|meter|km|mile|miles)\s+",
+        "",
+        text,
+    )
+
+    # Kalorienangaben entfernen
+    text = re.sub(
+        r"^\d+\s*(?:cal|cals)\s+",
+        "",
+        text,
+    )
+
+    # Zeitangaben entfernen
+    text = re.sub(
+        r"^\d+\s*(?:sec|secs|second|seconds|min|mins|minute|minutes)\s+",
+        "",
+        text,
+    )
+
+    return text.strip()
 
 
 # ============================================================================
@@ -254,6 +322,35 @@ def find_movement(exercise_name: str) -> Optional[CrossFitMovement]:
 
     return None
 
+def movement_pattern_key(
+    pattern: MovementPattern,
+) -> str:
+    return pattern.name.lower()
+
+def movement_patterns_to_classification(
+    movement: CrossFitMovement,
+) -> list[dict[str, Any]]:
+    """
+    Konvertiert die hinterlegten Movement Patterns in das
+    Klassifikationsformat der App.
+    """
+
+    if not movement.movement_patterns:
+        return []
+
+    contribution = round(
+        1 / len(movement.movement_patterns),
+        3,
+    )
+
+    return [
+        {
+            "type": pattern.name.lower(),
+            "role": "primary",
+            "contribution": contribution,
+        }
+        for pattern in movement.movement_patterns
+    ]
 
 def movements_for_level(
     level: AthleteLevel,
@@ -289,11 +386,17 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Air Squat",
+            "Air Squats",
             "Goblet Squat",
+            "Goblet Squats",
             "Front Squat",
+            "Front Squats",
             "Back Squat",
+            "Back Squats",
             "Overhead Squat",
+            "Overhead Squats",
             "Pause Squat",
+            "Pause Squats",
         ),
         aliases=(
             "air squat",
@@ -304,7 +407,47 @@ register(
             "ohs",
             "pause squat",
         ),
+        movement_patterns=(
+            MovementPattern.SQUAT,
+        ),
         notes="Tracks all squat variations.",
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="clean_and_jerk",
+        display_name="Clean & Jerk",
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.SCALED,
+
+        variants=(
+            "Clean & Jerk",
+            "Clean & Jerks",
+            "Clean and Jerk",
+            "Clean and Jerks",
+            "Squat Clean & Jerk",
+            "Squat Clean & Jerks",
+            "Squat Clean and Jerk",
+            "Squat Clean and Jerks",
+            "Power Clean & Jerk",
+            "Power Clean & Jerks",
+            "Power Clean and Jerk",
+            "Power Clean and Jerks",
+        ),
+
+        aliases=(
+            "C&J",
+            "CJ",
+        ),
+
+        movement_patterns=(
+            MovementPattern.HINGE,
+            MovementPattern.SQUAT,
+            MovementPattern.VERTICAL_PUSH,
+        ),
+
+        notes="Olympic lift consisting of a clean followed by a jerk.",
     )
 )
 
@@ -316,10 +459,15 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Deadlift",
+            "Deadlifts",
             "Romanian Deadlift",
+            "Romanian Deadlifts",
             "Sumo Deadlift",
+            "Sumo Deadlifts",
             "Single Leg Deadlift",
+            "Single Leg Deadlifts",
             "Trap Bar Deadlift",
+            "Trap Bar Deadlifts",
         ),
         aliases=(
             "dl",
@@ -329,6 +477,9 @@ register(
             "single leg deadlift",
             "trap bar deadlift",
         ),
+        movement_patterns=(
+            MovementPattern.HINGE,
+        ), 
         notes="Tracks all deadlift variations.",
     )
 )
@@ -340,24 +491,30 @@ register(
         category=MovementCategory.WEIGHTLIFTING,
         minimum_level=AthleteLevel.SCALED,
         variants=(
+            "Clean",
+            "Cleans",
             "Power Clean",
+            "Power Cleans",
             "Hang Power Clean",
+            "Hang Power Cleans",
             "Hang Clean",
+            "Hang Cleans",
             "Squat Clean",
+            "Squat Cleans",
             "Muscle Clean",
-            "Clean & Jerk",
+            "Muscle Cleans",
             "DB Clean",
+            "DB Cleans",
+            "Dumbbell Clean",
+            "Dumbbell Cleans",
         ),
         aliases=(
-            "power clean",
-            "hang power clean",
-            "hang clean",
-            "squat clean",
-            "muscle clean",
-            "clean and jerk",
-            "clean & jerk",
-            "db clean",
-            "dumbbell clean",
+            "pc",
+            "hc",
+        ),
+        movement_patterns=(
+            MovementPattern.HINGE,
+            MovementPattern.SQUAT,
         ),
         notes="Tracks the complete clean movement family.",
     )
@@ -370,13 +527,24 @@ register(
         category=MovementCategory.WEIGHTLIFTING,
         minimum_level=AthleteLevel.SCALED,
         variants=(
+            "Snatch",
+            "Snatches",
             "PVC Snatch",
+            "PVC Snatches",
             "Power Snatch",
+            "Power Snatches",
             "Hang Power Snatch",
+            "Hang Power Snatches",
             "Hang Snatch",
+            "Hang Snatches",
             "Squat Snatch",
+            "Squat Snatches",
             "Muscle Snatch",
+            "Muscle Snatches",
             "DB Snatch",
+            "DB Snatches",
+            "Dumbbell Snatch",
+            "Dumbbell Snatches",
         ),
         aliases=(
             "power snatch",
@@ -387,6 +555,10 @@ register(
             "muscle snatch",
             "db snatch",
             "dumbbell snatch",
+        ),
+        movement_patterns=(
+            MovementPattern.HINGE,
+            MovementPattern.SQUAT,
         ),
         notes="Tracks the complete snatch movement family.",
     )
@@ -399,14 +571,22 @@ register(
         category=MovementCategory.WEIGHTLIFTING,
         minimum_level=AthleteLevel.SCALED,
         variants=(
+            "Jerk",
+            "Jerks",
             "Push Jerk",
+            "Push Jerks",
             "Split Jerk",
+            "Split Jerks",
             "Power Jerk",
+            "Power Jerks",
         ),
         aliases=(
             "push jerk",
             "split jerk",
             "power jerk",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PUSH,
         ),
         notes="Tracks all jerk variations.",
     )
@@ -420,13 +600,22 @@ register(
         minimum_level=AthleteLevel.SCALED,
         variants=(
             "Thruster",
+            "Thrusters",
             "DB Thruster",
+            "DB Thrusters",
             "Single DB Thruster",
+            "Single DB Thrusters",
+            "Dumbbell Thruster",
+            "Dumbbell Thrusters",
         ),
         aliases=(
             "db thruster",
             "dumbbell thruster",
             "single db thruster",
+        ),
+        movement_patterns=(
+            MovementPattern.SQUAT,
+            MovementPattern.VERTICAL_PUSH,
         ),
         notes="Tracks all thruster variations.",
     )
@@ -440,13 +629,20 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Wall Ball",
+            "Wall Balls",
             "Heavy Wall Ball",
+            "Heavy Wall Balls",
             "Wall Ball Shot",
+            "Wall Ball Shots",
         ),
         aliases=(
             "wall balls",
             "wall ball shot",
             "heavy wall ball",
+        ),
+        movement_patterns=(
+            MovementPattern.SQUAT,
+            MovementPattern.VERTICAL_PUSH,
         ),
         notes="Tracks all wall ball variations.",
     )
@@ -464,10 +660,15 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Burpee",
+            "Burpees",
             "Burpee Over Bar",
+            "Burpee Over Bars",
             "Bar Facing Burpee",
+            "Bar Facing Burpees",
             "Burpee Box Jump",
+            "Burpee Box Jumps",
             "Burpee Box Jump Over",
+            "Burpee Box Jump Overs",
         ),
         aliases=(
             "bar facing burpee",
@@ -475,6 +676,10 @@ register(
             "burpee box jump",
             "burpee box jump over",
             "bbjo",
+        ),
+        movement_patterns=(
+            MovementPattern.SQUAT,
+            MovementPattern.HORIZONTAL_PUSH,
         ),
     )
 )
@@ -487,13 +692,22 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Box Step Up",
+            "Box Step Ups",
+            "Box Step Over",
+            "Box Step Overs",
             "Box Jump",
+            "Box Jumps",
             "Box Jump Over",
+            "Box Jump Overs",
         ),
         aliases=(
             "box step up",
+            "box step over",
             "box jump over",
             "bjo",
+        ),
+        movement_patterns=(
+            MovementPattern.SQUAT,
         ),
     )
 )
@@ -506,10 +720,15 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Farmer Carry",
+            "Farmer Carries",
             "Front Rack Carry",
+            "Front Rack Carries",
             "Overhead Carry",
+            "Overhead Carries",
             "Suitcase Carry",
+            "Suitcase Carries",
             "Sandbag Carry",
+            "Sandbag Carries",
         ),
         aliases=(
             "farmer carry",
@@ -518,6 +737,9 @@ register(
             "overhead carry",
             "suitcase carry",
             "sandbag carry",
+        ),
+        movement_patterns=(
+            MovementPattern.CARRY,
         ),
     )
 )
@@ -530,10 +752,17 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Walking Lunge",
+            "Walking Lunges",
             "Reverse Lunge",
+            "Reverse Lunges",
             "Forward Lunge",
+            "Forward Lunges",
             "Overhead Lunge",
+            "Overhead Lunges",
             "DB Walking Lunge",
+            "DB Walking Lunges",
+            "Dumbbell Walking Lunge",
+            "Dumbbell Walking Lunges",
         ),
         aliases=(
             "walking lunge",
@@ -541,6 +770,9 @@ register(
             "forward lunge",
             "overhead lunge",
             "db walking lunge",
+        ),
+        movement_patterns=(
+            MovementPattern.LUNGE,
         ),
     )
 )
@@ -553,12 +785,79 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Sled Push",
+            "Sled Pushes",
             "Sled Pull",
+            "Sled Pulls",
         ),
         aliases=(
             "sled push",
             "sled pull",
         ),
+        movement_patterns=(
+            MovementPattern.LOCOMOTION,
+        ),
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="devils_press",
+        display_name="Devil's Press",
+        category=MovementCategory.FUNCTIONAL,
+        minimum_level=AthleteLevel.SCALED,
+        variants=(
+            "Devil's Press",
+            "Devil's Presses",
+            "Single DB Devil's Press",
+            "Single DB Devil's Presses",
+            "Double DB Devil's Press",
+            "Double DB Devil's Presses",
+            "Single Dumbbell Devil's Press",
+            "Single Dumbbell Devil's Presses",
+            "Double Dumbbell Devil's Press",
+            "Double Dumbbell Devil's Presses",
+        ),
+        aliases=(
+            "devils press",
+            "single db devils press",
+            "double db devils press",
+        ),
+        movement_patterns=(
+            MovementPattern.HINGE,
+            MovementPattern.HORIZONTAL_PUSH,
+        ),
+        notes="Burpee combined with a dumbbell snatch.",
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="man_maker",
+        display_name="Man Maker",
+        category=MovementCategory.FUNCTIONAL,
+        minimum_level=AthleteLevel.SCALED,
+        variants=(
+            "Man Maker",
+            "Man Makers",
+            "Single DB Man Maker",
+            "Single DB Man Makers",
+            "Double DB Man Maker",
+            "Double DB Man Makers",
+            "Single Dumbbell Man Maker",
+            "Single Dumbbell Man Makers",
+            "Double Dumbbell Man Maker",
+            "Double Dumbbell Man Makers",
+        ),
+        aliases=(
+            "man maker",
+            "man makers",
+        ),
+        movement_patterns=(
+            MovementPattern.HINGE,
+            MovementPattern.HORIZONTAL_PUSH,
+            MovementPattern.VERTICAL_PUSH,
+        ),
+        notes="Compound dumbbell movement with push-up, row and press.",
     )
 )
 
@@ -574,12 +873,19 @@ register(
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
             "Wall Push-up",
+            "Wall Push-ups",
             "Incline Push-up",
+            "Incline Push-ups",
             "Knee Push-up",
+            "Knee Push-ups",
             "Push-up",
+            "Push-ups",
             "Hand Release Push-up",
+            "Hand Release Push-ups",
             "Deficit Push-up",
+            "Deficit Push-ups",
             "Ring Push-up",
+            "Ring Push-ups",
         ),
         aliases=(
             "wall push up",
@@ -589,6 +895,9 @@ register(
             "hr push up",
             "deficit push up",
             "ring push up",
+        ),
+        movement_patterns=(
+            MovementPattern.HORIZONTAL_PUSH,
         ),
         notes="Tracks all push-up variations.",
     )
@@ -602,19 +911,23 @@ register(
         minimum_level=AthleteLevel.SCALED,
         variants=(
             "Ring Row",
+            "Ring Rows",
             "Band Pull-up",
+            "Band Pull-ups",
             "Jumping Pull-up",
+            "Jumping Pull-ups",
             "Pull-up",
+            "Pull-ups",
             "Strict Pull-up",
+            "Strict Pull-ups",
             "Kipping Pull-up",
+            "Kipping Pull-ups",
         ),
         aliases=(
-            "ring row",
-            "band pull up",
             "banded pull up",
-            "jumping pull up",
-            "strict pull up",
-            "kipping pull up",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PULL,
         ),
         notes="Tracks the complete pull-up progression.",
     )
@@ -627,15 +940,21 @@ register(
         category=MovementCategory.GYMNASTICS,
         minimum_level=AthleteLevel.ADVANCED,
         variants=(
+            "Chest-to-Bar",
+            "Chest-to-Bars",
             "Chest-to-Bar Pull-up",
+            "Chest-to-Bar Pull-ups",
             "Strict Chest-to-Bar",
+            "Strict Chest-to-Bars",
             "Butterfly Chest-to-Bar",
+            "Butterfly Chest-to-Bars",
         ),
         aliases=(
             "ctb",
             "c2b",
-            "strict chest to bar",
-            "butterfly chest to bar",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PULL,
         ),
         notes="Advanced pulling movement.",
     )
@@ -649,9 +968,13 @@ register(
         minimum_level=AthleteLevel.ADVANCED,
         variants=(
             "Bar Muscle-up",
+            "Bar Muscle-ups",
             "Strict Bar Muscle-up",
+            "Strict Bar Muscle-ups",
             "Ring Muscle-up",
+            "Ring Muscle-ups",
             "Strict Ring Muscle-up",
+            "Strict Ring Muscle-ups",
         ),
         aliases=(
             "bar muscle up",
@@ -660,6 +983,10 @@ register(
             "ring mu",
             "strict bar muscle up",
             "strict ring muscle up",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PULL,
+            MovementPattern.VERTICAL_PUSH,
         ),
         notes="Tracks both bar and ring muscle-ups.",
     )
@@ -673,14 +1000,18 @@ register(
         minimum_level=AthleteLevel.SCALED,
         variants=(
             "Wall Handstand Hold",
+            "Wall Handstand Holds",
             "Freestanding Handstand",
+            "Freestanding Handstands",
             "Wall Walk",
+            "Wall Walks",
         ),
         aliases=(
-            "wall handstand",
-            "handstand hold",
-            "wall handstand hold",
-            "wall walk",
+            "hs hold",
+            "hs",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PUSH,
         ),
         notes="Scaled athletes are expected to master the wall version.",
     )
@@ -694,9 +1025,13 @@ register(
         minimum_level=AthleteLevel.ADVANCED,
         variants=(
             "Box Handstand Push-up",
+            "Box Handstand Push-ups",
             "Strict Handstand Push-up",
+            "Strict Handstand Push-ups",
             "Kipping Handstand Push-up",
+            "Kipping Handstand Push-ups",
             "Deficit Handstand Push-up",
+            "Deficit Handstand Push-ups",
         ),
         aliases=(
             "hspu",
@@ -704,6 +1039,9 @@ register(
             "kipping hspu",
             "deficit hspu",
             "box hspu",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PUSH,
         ),
         notes="Advanced gymnastics movement.",
     )
@@ -717,10 +1055,14 @@ register(
         minimum_level=AthleteLevel.ADVANCED,
         variants=(
             "Handstand Walk",
+            "Handstand Walks",
         ),
         aliases=(
             "hs walk",
             "hsw",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PUSH,
         ),
         notes="Only expected for advanced athletes.",
     )
@@ -733,18 +1075,25 @@ register(
         category=MovementCategory.GYMNASTICS,
         minimum_level=AthleteLevel.SCALED,
         variants=(
+            "Knee Raise",
+            "Knee Raises",
             "Hanging Knee Raise",
+            "Hanging Knee Raises",
+            "Leg Raise",
+            "Leg Raises",
             "Hanging Leg Raise",
+            "Hanging Leg Raises",
             "Toes-to-Bar",
             "Strict Toes-to-Bar",
+            "Toes-to-Bars",
+            "Strict Toes-to-Bars",
         ),
         aliases=(
             "ttb",
-            "knee raise",
-            "hanging knee raise",
-            "leg raise",
-            "hanging leg raise",
-            "strict toes to bar",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PULL,
+            MovementPattern.CORE_FLEXION,
         ),
         notes="Tracks the complete hanging core progression.",
     )
@@ -758,12 +1107,18 @@ register(
         minimum_level=AthleteLevel.SCALED,
         variants=(
             "Assisted Rope Climb",
+            "Assisted Rope Climbs",
             "Rope Climb",
+            "Rope Climbs",
             "Legless Rope Climb",
+            "Legless Rope Climbs",
         ),
         aliases=(
             "legless rope climb",
             "assisted rope climb",
+        ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PULL,
         ),
     )
 )
@@ -776,27 +1131,38 @@ register(
         minimum_level=AthleteLevel.SCALED,
         variants=(
             "Bench Dip",
+            "Bench Dips",
             "Ring Dip",
+            "Ring Dips",
             "Strict Ring Dip",
+            "Strict Ring Dips",
         ),
         aliases=(
             "bench dip",
             "strict ring dip",
             "dip",
         ),
+        movement_patterns=(
+            MovementPattern.VERTICAL_PUSH,
+        ),
     )
 )
 
 register(
     CrossFitMovement(
-        movement_id="pistols",
+        movement_id="pistol",
         display_name="Pistols",
         category=MovementCategory.GYMNASTICS,
         minimum_level=AthleteLevel.ADVANCED,
         variants=(
+            "Pistol",
+            "Pistols",
             "Assisted Pistol",
+            "Assisted Pistols",
             "Pistol Squat",
+            "Pistol Squats",
             "Weighted Pistol",
+            "Weighted Pistols",
         ),
         aliases=(
             "pistol",
@@ -805,7 +1171,163 @@ register(
             "weighted pistol",
             "assisted pistol",
         ),
+        movement_patterns=(
+            MovementPattern.SQUAT,
+        ),
         notes="Single-leg squat progression.",
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="sit_up",
+        display_name="Sit-up",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            "Sit-up",
+            "Sit-ups",
+            "AbMat Sit-up",
+            "AbMat Sit-ups",
+            "Anchored Sit-up",
+            "Anchored Sit-ups",
+            "Butterfly Sit-up",
+            "Butterfly Sit-ups",
+            "GHD Sit-up",
+            "GHD Sit-ups",
+        ),
+        aliases=(
+            "sit up",
+            "sit ups",
+            "abmat sit up",
+            "abmat sit ups",
+            "anchored sit up",
+            "anchored sit ups",
+            "butterfly sit up",
+            "butterfly sit ups",
+            "ghd sit up",
+            "ghd sit ups",
+        ),
+        movement_patterns=(
+            MovementPattern.CORE_FLEXION,
+        ),
+        notes="Tracks all sit-up variations.",
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="russian_twist",
+        display_name="Russian Twist",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            "Russian Twist",
+            "Russian Twists",
+            "Weighted Russian Twist",
+            "Weighted Russian Twists",
+        ),
+        aliases=(
+            "russian twist",
+            "russian twists",
+            "weighted russian twist",
+            "weighted russian twists",
+        ),
+        movement_patterns=(
+            MovementPattern.ROTATION,
+        ),
+        notes="Tracks all Russian Twist variations.",
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="v_up",
+        display_name="V-Up",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.SCALED,
+        variants=(
+            "V-Up",
+            "V-Ups",
+        ),
+        aliases=(
+            "v up",
+            "v ups",
+        ),
+        movement_patterns=(
+            MovementPattern.CORE_FLEXION,
+        ),
+        notes="Dynamic core flexion exercise.",
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="hollow_rock",
+        display_name="Hollow Rock",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.SCALED,
+        variants=(
+            "Hollow Rock",
+            "Hollow Rocks",
+        ),
+        aliases=(
+            "hollow rock",
+            "hollow rocks",
+        ),
+        movement_patterns=(
+            MovementPattern.CORE_FLEXION,
+        ),
+        notes="Dynamic hollow body progression.",
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="tuck_up",
+        display_name="Tuck-up",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            "Tuck-up",
+            "Tuck-ups",
+            "Tuck Up",
+            "Tuck Ups",
+        ),
+        aliases=(
+            "tuck up",
+            "tuck ups",
+        ),
+        movement_patterns=(
+            MovementPattern.CORE_FLEXION,
+        ),
+        notes="Dynamic core flexion exercise.",
+    )
+)
+
+register(
+    CrossFitMovement(
+        movement_id="windshield_wiper",
+        display_name="Windshield Wiper",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.ADVANCED,
+        variants=(
+            "Windshield Wiper",
+            "Windshield Wipers",
+            "Hanging Windshield Wiper",
+            "Hanging Windshield Wipers",
+        ),
+        aliases=(
+            "windshield wiper",
+            "windshield wipers",
+            "hanging windshield wiper",
+            "hanging windshield wipers",
+        ),
+        movement_patterns=(
+            MovementPattern.ROTATION,
+            MovementPattern.CORE_FLEXION,
+        ),
+        notes="Advanced rotational core exercise.",
     )
 )
 
@@ -837,6 +1359,9 @@ register(
             "1600m run",
             "1 mile run",
         ),
+        movement_patterns=(
+            MovementPattern.LOCOMOTION,
+        ),
         notes="All running variations.",
     )
 )
@@ -859,6 +1384,9 @@ register(
             "concept2 row",
             "c2 row",
         ),
+        movement_patterns=(
+            MovementPattern.LOCOMOTION,
+        ),
         notes="RowErg / Concept2 rowing.",
     )
 )
@@ -877,6 +1405,9 @@ register(
             "skierg",
             "ski erg",
         ),
+        movement_patterns=(
+            MovementPattern.LOCOMOTION,
+        ), 
         notes="Concept2 SkiErg.",
     )
 )
@@ -899,6 +1430,9 @@ register(
             "assault bike",
             "echo bike",
             "air bike",
+        ),
+        movement_patterns=(
+            MovementPattern.LOCOMOTION,
         ),
         notes="All bike ergometers.",
     )
@@ -924,6 +1458,9 @@ register(
             "du",
             "triple under",
             "triple unders",
+        ),
+        movement_patterns=(
+            MovementPattern.LOCOMOTION,
         ),
         notes=(
             "Beginner: Single Unders\n"

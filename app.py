@@ -1333,6 +1333,8 @@ with tab2:
                 )
             )
 
+        st.write(training_dimensions["movement_pattern_load"])
+
         if training_dimensions is None:
             training_dimensions = {
                 "movement_pattern_load": {},

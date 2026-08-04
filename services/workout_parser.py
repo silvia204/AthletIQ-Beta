@@ -9,6 +9,7 @@ weights, EMOM, AMRAP, etc.) will be added later.
 """
 
 from __future__ import annotations
+from enum import Enum
 
 import re
 from dataclasses import dataclass, field
@@ -80,12 +81,86 @@ def _parse_line(line: str) -> Optional[ExerciseEntry]:
 
 
 def parse_workout(text: str) -> ParsedWorkout:
-    """Parse a workout description into structured data."""
+    """
+    Parse a workout description into structured data.
+
+    Unterstützt sowohl mehrzeilige Workouts als auch
+    einzeilige Google-Sheet-Einträge wie:
+
+    Strength Deadlifts: 4x4 Deadlifts |
+    5 RFT: 250m Row, 10 Burpees, 5 Deadlifts
+    """
 
     parsed = ParsedWorkout(original_text=text)
 
-    for line in text.splitlines():
-        exercise = _parse_line(line)
+    # Vereinheitliche typische Trenner
+    normalized = (
+        text.replace(" | ", "\n")
+            .replace("|", "\n")
+            .replace(",", "\n")
+            .replace(";", "\n")
+    )
+
+    # Zerlege zusätzlich an Doppelpunkten
+    fragments: list[str] = []
+
+    for line in normalized.splitlines():
+
+        line = line.strip()
+
+        if not line:
+            continue
+
+        if ":" in line:
+            fragments.extend(
+                part.strip()
+                for part in line.split(":")
+                if part.strip()
+            )
+        else:
+            fragments.append(line)
+
+    # Offensichtliche Workout-Überschriften ignorieren
+    ignored_prefixes = (
+        "strength",
+        "warm up",
+        "warm-up",
+        "cool down",
+        "cool-down",
+        "skill",
+        "accessory",
+        "metcon",
+        "workout",
+        "amrap",
+        "emom",
+        "for time",
+        "rft",
+    )
+
+    cleaned_fragments: list[str] = []
+
+    for fragment in fragments:
+
+        lower = fragment.casefold()
+
+        if lower.startswith(ignored_prefixes):
+            continue
+
+        # "5 RFT" oder "3 Runden" entfernen
+        fragment = re.sub(
+            r"^\d+\s*(rft|rounds?|runden)\b[:\s-]*",
+            "",
+            fragment,
+            flags=re.IGNORECASE,
+        ).strip()
+
+        if fragment:
+            cleaned_fragments.append(fragment)
+
+    for fragment in cleaned_fragments:
+
+        exercise = _parse_line(fragment)
+
         if exercise:
             parsed.exercises.append(exercise)
 

@@ -1326,6 +1326,23 @@ def build_crossfit_movement_summary(
 
         parsed = parse_workout(workout_text)
 
+
+
+        parsed = parse_workout(workout_text)
+
+        print("=" * 80)
+        print(workout_text)
+
+        print("Übungen:")
+        print([e.exercise for e in parsed.exercises])
+
+        print("Movements:")
+        print([m.display_name for m in parsed.movements])
+
+
+
+
+
         for movement in parsed.movements:
 
             movement_counter[movement.movement_id] = (

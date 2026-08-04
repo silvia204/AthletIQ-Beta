@@ -1,6 +1,10 @@
 import json
 from typing import Any
 
+from services.crossfit_movements import (
+    find_movement,
+    movement_patterns_to_classification,
+)
 from services.mistral_service import call_mistral
 from services.utils import (
     clean_json_response,
@@ -479,8 +483,8 @@ def build_workout_classification_prompt(
             {
                 "name": "Back Squat",
                 "details": "4 x 5 mit 80 kg",
-                "canonical_name": "Barbell Back Squat",
-                "canonical_id": "barbell_back_squat",
+                "canonical_name": "Back Squat",
+                "canonical_id": "back_squat",
                 "movement_patterns": [
                     {
                         "type": "squat",
@@ -557,10 +561,10 @@ REGELN:
 
 1. Erfinde keine zusätzlichen Kategorien.
 
-2. Jede Übung hat genau ein primäres Bewegungsmuster.
+2. Jede Übung muss eindeutig anhand ihres Bewegungsnamens identifiziert werden.
 
-3. Optional dürfen höchstens zwei sekundäre
-   Bewegungsmuster vergeben werden.
+3. canonical_name darf ausschließlich den kanonischen englischen
+Übungsnamen enthalten.
 
 4. Muskelgruppen erhalten eine Rolle:
    - primary
@@ -591,13 +595,53 @@ REGELN:
    - confidence entsprechend reduzieren
    - den Grund konkret benennen
 
-10. Übernimm name und details aus der Eingabe
-    unverändert.
+10. Verändere die Eingabe niemals.
+Die Felder "name" und "details" müssen exakt aus der Eingabe übernommen werden.
+Übersetze, normalisiere, ergänze oder korrigiere diese Felder nicht.
 
-11. canonical_name ist ein einheitlicher
-    englischer Übungsname.
+11. canonical_name must contain ONLY the canonical exercise name.
 
-12. canonical_id muss snake_case sein.
+Never include:
+- repetitions
+- sets
+- distance
+- duration
+- weight
+- workout structure (Buy-in, Cash-out, EMOM, AMRAP, For Time, Chipper, etc.)
+- descriptive words (Heavy, Light, Fast, Strict, Weighted, etc.)
+
+Examples:
+
+✓ Run
+✓ Row
+✓ SkiErg
+✓ BikeErg
+✓ Back Squat
+✓ Front Squat
+✓ Thruster
+✓ Clean
+✓ Clean & Jerk
+✓ Sit-up
+✓ Russian Twist
+
+Never:
+
+✗ 800 Meter Run
+✗ 50 Cal Row
+✗ Heavy Back Squat
+✗ Buy-in Row
+✗ Cash-out Sit-ups
+
+12. canonical_id must be the snake_case version of canonical_name.
+
+    Examples:
+
+    Run -> run
+    Row -> row
+    Back Squat -> back_squat
+    Clean & Jerk -> clean_and_jerk
+    Sit-up -> sit_up
+    Russian Twist -> russian_twist
 
 13. Volumenwerte nur eintragen, wenn sie aus der
     Eingabe eindeutig ableitbar sind.
@@ -637,7 +681,19 @@ REGELN:
 26. Trage einen Volumenwert nur ein, wenn er direkt und
     eindeutig aus der Eingabe hervorgeht.
 
-27. Wenn ein Wert nicht eindeutig bekannt ist, verwende null.
+27. Erfinde niemals Informationen, die nicht ausdrücklich in der Eingabe enthalten sind.
+
+Schätze oder ergänze niemals:
+- Distanzen
+- Rundenzahlen
+- Wiederholungen
+- Sätze
+- Dauer
+- Pausenzeiten
+- Gewichte
+- Workout-Struktur
+
+Wenn eine Information nicht eindeutig aus der Eingabe hervorgeht, verwende null.
 
 28. Berechne weight_distance nur für Übungen, bei denen
     ein Gewicht tatsächlich über eine Distanz getragen,
@@ -649,12 +705,7 @@ REGELN:
 30. Verwende ausschließlich gültiges JSON ohne Kommentare,
     Erklärungen oder Anmerkungen außerhalb von Stringwerten.
 
-31. Bei einem komplexen Workout-Block mit mehreren klar
-    unterschiedlichen Bewegungsmustern verwende "mixed"
-    als primäres Bewegungsmuster.
 
-32. Führe die wichtigsten enthaltenen Bewegungsmuster als
-    sekundäre Muster auf, soweit das Schema dies erlaubt.
 
 
 SPORTLICHES ZIEL:
@@ -707,6 +758,44 @@ def classify_workout(
     parsed_response = clean_json_response(
         raw_response
     )
+
+    print("=" * 60)
+    for exercise in parsed_response.get("uebungen", []):
+        print(
+            exercise.get("name"),
+            "->",
+            exercise.get("canonical_name"),
+        )
+    print("=" * 60)
+
+    for exercise in parsed_response.get(
+        "uebungen",
+        [],
+    ):
+        if not isinstance(exercise, dict):
+            continue
+
+        movement = find_movement(
+            exercise.get(
+                "canonical_name",
+                "",
+            )
+        )
+        print(
+            exercise.get("canonical_name"),
+            "=>",
+                movement.display_name if movement else "NICHT GEFUNDEN",
+            )
+        
+
+        if movement is None:
+            continue
+
+        exercise["movement_patterns"] = (
+            movement_patterns_to_classification(
+                movement
+            )
+        )
 
     return normalize_classification(
         parsed_response,
