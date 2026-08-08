@@ -1,101 +1,41 @@
 from typing import Any
 
 
+from models.parsed_workout import ParsedWorkout
+
+
 def calculate_structural_score(
-    exercises: list[dict[str, Any]],
+    parsed_workout: ParsedWorkout,
 ) -> int:
     """
     Erstellt eine grobe strukturelle Belastungsbewertung
-    aus den erkannten Workout-Inhalten.
+    aus dem neutral geparsten Workout.
     """
 
     score = 0
 
-    for exercise in exercises:
-        name = str(
-            exercise.get("name", "")
+    for segment in parsed_workout.segments:
+        segment_type = str(
+            segment.type or ""
         ).casefold()
 
-        details = str(
-            exercise.get("details", "")
+        segment_name = str(
+            segment.name or ""
         ).casefold()
 
-        text = f"{name} {details}"
+        segment_notes = str(
+            segment.notes or ""
+        ).casefold()
 
+        segment_text = (
+            f"{segment_type} "
+            f"{segment_name} "
+            f"{segment_notes}"
+        )
+
+        # Workout-Struktur einmal pro Segment bewerten
         if any(
-            term in text
-            for term in [
-                "deadlift",
-                "kreuzheben",
-                "rdl",
-            ]
-        ):
-            if any(
-                term in details
-                for term in [
-                    "satz",
-                    "sätze",
-                    "sets",
-                ]
-            ):
-                score += 15
-            else:
-                score += 10
-
-        if any(
-            term in text
-            for term in [
-                "squat",
-                "kniebeuge",
-                "thruster",
-                "wall ball",
-                "lunge",
-                "ausfallschritt",
-            ]
-        ):
-            score += 8
-
-        if any(
-            term in text
-            for term in [
-                "clean",
-                "snatch",
-                "jerk",
-                "press",
-                "reißen",
-                "umsetzen",
-                "stoßen",
-            ]
-        ):
-            score += 10
-
-        if any(
-            term in text
-            for term in [
-                "row",
-                "rudern",
-                "rowing",
-            ]
-        ):
-            score += 6
-
-        if any(
-            term in text
-            for term in [
-                "run",
-                "laufen",
-                "running",
-                "jog",
-                "kilometer",
-            ]
-        ):
-            score += 6
-
-        if "burpee" in text:
-            score += 5
-
-        if any(
-            term in text
+            term in segment_text
             for term in [
                 "rft",
                 "amrap",
@@ -106,50 +46,132 @@ def calculate_structural_score(
         ):
             score += 12
 
-        if any(
-            term in text
-            for term in [
-                "bike",
-                "echo bike",
-                "assault bike",
-            ]
-        ):
-            score += 6
+        for element in segment.elements:
+            movement_name = str(
+                element.movement.canonical_name or ""
+            ).casefold()
 
-        if any(
-            term in text
-            for term in [
-                "ski erg",
-                "skierg",
-                "ski-erg",
-            ]
-        ):
-            score += 6
+            raw_name = str(
+                element.movement.raw_name or ""
+            ).casefold()
 
-        if any(
-            term in text
-            for term in [
-                "sled push",
-                "sled pull",
-                "schlitten",
-            ]
-        ):
-            score += 10
+            notes = str(
+                element.notes or ""
+            ).casefold()
 
-        if any(
-            term in text
-            for term in [
-                "pull-up",
-                "pullup",
-                "klimmzug",
-                "toes to bar",
-                "muscle-up",
-            ]
-        ):
-            score += 8
+            text = (
+                f"{movement_name} "
+                f"{raw_name} "
+                f"{notes}"
+            )
+
+            if any(
+                term in text
+                for term in [
+                    "deadlift",
+                    "kreuzheben",
+                    "rdl",
+                ]
+            ):
+                if element.sets:
+                    score += 15
+                else:
+                    score += 10
+
+            if any(
+                term in text
+                for term in [
+                    "squat",
+                    "kniebeuge",
+                    "thruster",
+                    "wall ball",
+                    "lunge",
+                    "ausfallschritt",
+                ]
+            ):
+                score += 8
+
+            if any(
+                term in text
+                for term in [
+                    "clean",
+                    "snatch",
+                    "jerk",
+                    "press",
+                    "reißen",
+                    "umsetzen",
+                    "stoßen",
+                ]
+            ):
+                score += 10
+
+            if any(
+                term in text
+                for term in [
+                    "row",
+                    "rudern",
+                    "rowing",
+                ]
+            ):
+                score += 6
+
+            if any(
+                term in text
+                for term in [
+                    "run",
+                    "laufen",
+                    "running",
+                    "jog",
+                ]
+            ):
+                score += 6
+
+            if "burpee" in text:
+                score += 5
+
+            if any(
+                term in text
+                for term in [
+                    "bike",
+                    "echo bike",
+                    "assault bike",
+                ]
+            ):
+                score += 6
+
+            if any(
+                term in text
+                for term in [
+                    "ski erg",
+                    "skierg",
+                    "ski-erg",
+                ]
+            ):
+                score += 6
+
+            if any(
+                term in text
+                for term in [
+                    "sled push",
+                    "sled pull",
+                    "schlitten",
+                ]
+            ):
+                score += 10
+
+            if any(
+                term in text
+                for term in [
+                    "pull-up",
+                    "pullup",
+                    "klimmzug",
+                    "toes to bar",
+                    "muscle-up",
+                ]
+            ):
+                score += 8
 
     return score
-
 
 def get_level_factor(level: str) -> float:
     if "Anfänger" in level:

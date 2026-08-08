@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from typing import Any
-from services.crossfit_movements import AthleteLevel
-
+from services.movement_registry import AthleteLevel
+from models.training_analysis import TrainingAnalysis
 
 def _num(value: object, default: float = 0.0) -> float:
     try:
@@ -11,15 +11,22 @@ def _num(value: object, default: float = 0.0) -> float:
         return default
 
 
-def _findings(training_analysis: dict[str, Any]) -> list[dict[str, Any]]:
-    values = training_analysis.get("top_findings") or training_analysis.get("findings") or []
-    return [item for item in values if isinstance(item, dict)]
+def _findings(
+    training_analysis: TrainingAnalysis,
+) -> list[dict[str, Any]]:
+    values = training_analysis.top_findings or []
+
+    return [
+        item
+        for item in values
+        if isinstance(item, dict)
+    ]
 
 
 def build_readiness_summary(
     *,
     history_summary: dict[str, Any],
-    training_analysis: dict[str, Any],
+    training_analysis: TrainingAnalysis,
 ) -> dict[str, str]:
     window_7 = (history_summary.get("windows", {}) or {}).get("7_days", {}) or {}
     sessions = int(_num(window_7.get("sessions")))
@@ -148,17 +155,15 @@ def _focus_for_text(text: str) -> dict[str, str] | None:
 
 def build_weekly_focus(
     *,
-    training_analysis: dict[str, Any],
+    history_summary: dict[str, Any],
+    training_analysis: TrainingAnalysis,
     primary_goal: str,
     training_balance: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """Return one supporting priority, never a weekly training plan."""
     findings = _findings(training_analysis)
     crossfit_focus = build_crossfit_focus(
-        history_summary=training_analysis.get(
-            "history_summary",
-            {}
-        )
+        history_summary=history_summary
     )
 
     if crossfit_focus is not None:
@@ -232,7 +237,7 @@ def build_weekly_focus(
 def build_positive_observations(
     *,
     history_summary: dict[str, Any],
-    training_analysis: dict[str, Any],
+    training_analysis: TrainingAnalysis,
 ) -> list[str]:
     windows = history_summary.get("windows", {}) or {}
     w7 = windows.get("7_days", {}) or {}

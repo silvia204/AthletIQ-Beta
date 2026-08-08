@@ -1,6 +1,6 @@
 """
 SportCoach App
-Module: crossfit_movements.py
+Module: movement_registry.py
 
 Version: 1.0.0
 Status: Production Ready
@@ -32,7 +32,7 @@ class AthleteLevel(str, Enum):
 
 
 class MovementCategory(str, Enum):
-    """Main CrossFit movement categories."""
+    """Main ovement categories."""
 
     WEIGHTLIFTING = "Weightlifting"
     GYMNASTICS = "Gymnastics"
@@ -59,13 +59,40 @@ class MovementPattern(str, Enum):
     CARRY = "Carry"
     LOCOMOTION = "Locomotion"
 
+"""
+Muscle groups describe the PRIMARY training stimulus of a movement.
+Only include muscles that represent the main adaptation.
+Do NOT include stabilizers or every anatomically involved muscle.
+Maximum:
+    3 muscle groups per movement.
+"""
+class MuscleGroup(str, Enum):
+
+    CHEST = "Chest"
+    SHOULDERS = "Shoulders"
+    TRICEPS = "Triceps"
+
+    BACK = "Back"
+    LATS = "Lats"
+    BICEPS = "Biceps"
+    HIP_FLEXORS = "Hip Flexors"
+    TRAPS = "Trapezius"
+
+    QUADRICEPS = "Quadriceps"
+    HAMSTRINGS = "Hamstrings"
+    GLUTES = "Glutes"
+    CALVES = "Calves"
+
+    CORE = "Core"
+
+    FOREARMS = "Forearms"
 
 # ============================================================================
 # DATACLASSES
 # ============================================================================
 
 @dataclass(frozen=True)
-class CrossFitMovement:
+class Movement:
     """
     Represents one CrossFit movement family.
 
@@ -95,6 +122,10 @@ class CrossFitMovement:
     aliases: Tuple[str, ...]
 
     movement_patterns: Tuple[MovementPattern, ...] = ()
+
+    muscle_groups: Tuple[MuscleGroup, ...] = ()
+
+    is_crossfit_movement: bool = False
 
     notes: str = ""
 
@@ -211,20 +242,20 @@ def normalize_name(text: str) -> str:
 # LOOKUP TABLES
 # ============================================================================
 
-MOVEMENTS: List[CrossFitMovement] = []
+MOVEMENTS: List[Movement] = []
 
-MOVEMENT_BY_ID: Dict[str, CrossFitMovement] = {}
+MOVEMENT_BY_ID: Dict[str, Movement] = {}
 
-MOVEMENT_BY_ALIAS: Dict[str, CrossFitMovement] = {}
+MOVEMENT_BY_ALIAS: Dict[str, Movement] = {}
 
-MOVEMENT_BY_VARIANT: Dict[str, CrossFitMovement] = {}
+MOVEMENT_BY_VARIANT: Dict[str, Movement] = {}
 
 
 # ============================================================================
 # INTERNAL REGISTRATION
 # ============================================================================
 
-def register(movement: CrossFitMovement) -> None:
+def register(movement: Movement) -> None:
     """
     Registers a movement family and automatically builds
     all lookup dictionaries.
@@ -287,19 +318,19 @@ def register(movement: CrossFitMovement) -> None:
 # PUBLIC API
 # ============================================================================
 
-def all_movements() -> Tuple[CrossFitMovement, ...]:
+def all_movements() -> Tuple[Movement, ...]:
     """Returns every registered movement family."""
 
     return tuple(MOVEMENTS)
 
 
-def get_movement(movement_id: str) -> Optional[CrossFitMovement]:
+def get_movement(movement_id: str) -> Optional[Movement]:
     """Returns a movement by its id."""
 
     return MOVEMENT_BY_ID.get(movement_id)
 
 
-def find_movement(exercise_name: str) -> Optional[CrossFitMovement]:
+def find_movement(exercise_name: str) -> Optional[Movement]:
     """
     Finds the movement family belonging to an exercise.
 
@@ -328,7 +359,7 @@ def movement_pattern_key(
     return pattern.name.lower()
 
 def movement_patterns_to_classification(
-    movement: CrossFitMovement,
+    movement: Movement,
 ) -> list[dict[str, Any]]:
     """
     Konvertiert die hinterlegten Movement Patterns in das
@@ -354,7 +385,7 @@ def movement_patterns_to_classification(
 
 def movements_for_level(
     level: AthleteLevel,
-) -> Tuple[CrossFitMovement, ...]:
+) -> Tuple[Movement, ...]:
     """
     Returns all movement families expected for the
     specified athlete level.
@@ -379,7 +410,7 @@ def movements_for_level(
 # ============================================================================
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="squat",
         display_name="Squat",
         category=MovementCategory.WEIGHTLIFTING,
@@ -410,12 +441,17 @@ register(
         movement_patterns=(
             MovementPattern.SQUAT,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks all squat variations.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="clean_and_jerk",
         display_name="Clean & Jerk",
         category=MovementCategory.WEIGHTLIFTING,
@@ -447,12 +483,18 @@ register(
             MovementPattern.VERTICAL_PUSH,
         ),
 
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.GLUTES,
+        ),
+
         notes="Olympic lift consisting of a clean followed by a jerk.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="deadlift",
         display_name="Deadlift",
         category=MovementCategory.WEIGHTLIFTING,
@@ -480,12 +522,18 @@ register(
         movement_patterns=(
             MovementPattern.HINGE,
         ), 
+        muscle_groups=(
+            MuscleGroup.HAMSTRINGS,
+            MuscleGroup.GLUTES,
+            MuscleGroup.BACK,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks all deadlift variations.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="clean",
         display_name="Clean",
         category=MovementCategory.WEIGHTLIFTING,
@@ -516,12 +564,18 @@ register(
             MovementPattern.HINGE,
             MovementPattern.SQUAT,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+            MuscleGroup.TRAPS,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks the complete clean movement family.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="snatch",
         display_name="Snatch",
         category=MovementCategory.WEIGHTLIFTING,
@@ -560,12 +614,18 @@ register(
             MovementPattern.HINGE,
             MovementPattern.SQUAT,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.TRAPS,
+            MuscleGroup.GLUTES,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks the complete snatch movement family.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="jerk",
         display_name="Jerk",
         category=MovementCategory.WEIGHTLIFTING,
@@ -588,12 +648,17 @@ register(
         movement_patterns=(
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.TRICEPS,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks all jerk variations.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="thruster",
         display_name="Thruster",
         category=MovementCategory.WEIGHTLIFTING,
@@ -617,12 +682,18 @@ register(
             MovementPattern.SQUAT,
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+            MuscleGroup.SHOULDERS,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks all thruster variations.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="wall_ball",
         display_name="Wall Ball",
         category=MovementCategory.WEIGHTLIFTING,
@@ -644,6 +715,12 @@ register(
             MovementPattern.SQUAT,
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+            MuscleGroup.SHOULDERS,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks all wall ball variations.",
     )
 )
@@ -653,7 +730,7 @@ register(
 # ============================================================================
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="burpee",
         display_name="Burpee",
         category=MovementCategory.FUNCTIONAL,
@@ -681,11 +758,17 @@ register(
             MovementPattern.SQUAT,
             MovementPattern.HORIZONTAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.CHEST,
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.SHOULDERS,
+        ),
+        is_crossfit_movement=True,
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="box_jump",
         display_name="Box Jump",
         category=MovementCategory.FUNCTIONAL,
@@ -709,11 +792,17 @@ register(
         movement_patterns=(
             MovementPattern.SQUAT,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+            MuscleGroup.CALVES,
+        ),
+        is_crossfit_movement=True,
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="carry",
         display_name="Carry",
         category=MovementCategory.FUNCTIONAL,
@@ -741,11 +830,17 @@ register(
         movement_patterns=(
             MovementPattern.CARRY,
         ),
+        muscle_groups=(
+            MuscleGroup.FOREARMS,
+            MuscleGroup.TRAPS,
+            MuscleGroup.BACK,
+        ),
+        is_crossfit_movement=True,
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="lunge",
         display_name="Lunge",
         category=MovementCategory.FUNCTIONAL,
@@ -774,11 +869,17 @@ register(
         movement_patterns=(
             MovementPattern.LUNGE,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+            MuscleGroup.HAMSTRINGS,
+        ),
+        is_crossfit_movement=True,
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="sled",
         display_name="Sled",
         category=MovementCategory.FUNCTIONAL,
@@ -796,11 +897,17 @@ register(
         movement_patterns=(
             MovementPattern.LOCOMOTION,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+            MuscleGroup.CALVES,
+        ),
+        is_crossfit_movement=False,
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="devils_press",
         display_name="Devil's Press",
         category=MovementCategory.FUNCTIONAL,
@@ -826,12 +933,18 @@ register(
             MovementPattern.HINGE,
             MovementPattern.HORIZONTAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.TRICEPS,
+            MuscleGroup.GLUTES,
+        ),
+        is_crossfit_movement=False,
         notes="Burpee combined with a dumbbell snatch.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="man_maker",
         display_name="Man Maker",
         category=MovementCategory.FUNCTIONAL,
@@ -857,6 +970,12 @@ register(
             MovementPattern.HORIZONTAL_PUSH,
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.BACK,
+            MuscleGroup.CHEST,
+        ),
+        is_crossfit_movement=False,
         notes="Compound dumbbell movement with push-up, row and press.",
     )
 )
@@ -866,7 +985,7 @@ register(
 # ============================================================================
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="push_up",
         display_name="Push-up",
         category=MovementCategory.GYMNASTICS,
@@ -899,12 +1018,18 @@ register(
         movement_patterns=(
             MovementPattern.HORIZONTAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.CHEST,
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.TRICEPS,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks all push-up variations.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="pull_up",
         display_name="Pull-up",
         category=MovementCategory.GYMNASTICS,
@@ -929,12 +1054,17 @@ register(
         movement_patterns=(
             MovementPattern.VERTICAL_PULL,
         ),
+        muscle_groups=(
+            MuscleGroup.LATS,
+            MuscleGroup.BICEPS,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks the complete pull-up progression.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="chest_to_bar",
         display_name="Chest-to-Bar",
         category=MovementCategory.GYMNASTICS,
@@ -956,12 +1086,17 @@ register(
         movement_patterns=(
             MovementPattern.VERTICAL_PULL,
         ),
+        muscle_groups=(
+            MuscleGroup.LATS,
+            MuscleGroup.BICEPS,
+        ),
+        is_crossfit_movement=True,
         notes="Advanced pulling movement.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="muscle_up",
         display_name="Muscle-up",
         category=MovementCategory.GYMNASTICS,
@@ -988,12 +1123,18 @@ register(
             MovementPattern.VERTICAL_PULL,
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.LATS,
+            MuscleGroup.CHEST,
+            MuscleGroup.SHOULDERS,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks both bar and ring muscle-ups.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="handstand",
         display_name="Handstand",
         category=MovementCategory.GYMNASTICS,
@@ -1013,12 +1154,18 @@ register(
         movement_patterns=(
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.TRICEPS,
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=True,
         notes="Scaled athletes are expected to master the wall version.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="handstand_push_up",
         display_name="Handstand Push-up",
         category=MovementCategory.GYMNASTICS,
@@ -1043,12 +1190,18 @@ register(
         movement_patterns=(
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.TRICEPS,
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=True,
         notes="Advanced gymnastics movement.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="handstand_walk",
         display_name="Handstand Walk",
         category=MovementCategory.GYMNASTICS,
@@ -1064,12 +1217,18 @@ register(
         movement_patterns=(
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.TRICEPS,
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=True,
         notes="Only expected for advanced athletes.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="toes_to_bar",
         display_name="Toes-to-Bar",
         category=MovementCategory.GYMNASTICS,
@@ -1095,12 +1254,17 @@ register(
             MovementPattern.VERTICAL_PULL,
             MovementPattern.CORE_FLEXION,
         ),
+        muscle_groups=(
+            MuscleGroup.CORE,
+            MuscleGroup.HIP_FLEXORS,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks the complete hanging core progression.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="rope_climb",
         display_name="Rope Climb",
         category=MovementCategory.GYMNASTICS,
@@ -1120,11 +1284,16 @@ register(
         movement_patterns=(
             MovementPattern.VERTICAL_PULL,
         ),
+        muscle_groups=(
+            MuscleGroup.CALVES,
+            MuscleGroup.FOREARMS,
+        ),
+        is_crossfit_movement=True,
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="ring_dip",
         display_name="Ring Dip",
         category=MovementCategory.GYMNASTICS,
@@ -1145,11 +1314,17 @@ register(
         movement_patterns=(
             MovementPattern.VERTICAL_PUSH,
         ),
+        muscle_groups=(
+            MuscleGroup.CHEST,
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.TRICEPS,
+        ),
+        is_crossfit_movement=True,
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="pistol",
         display_name="Pistols",
         category=MovementCategory.GYMNASTICS,
@@ -1174,12 +1349,17 @@ register(
         movement_patterns=(
             MovementPattern.SQUAT,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+        ),
+        is_crossfit_movement=True,
         notes="Single-leg squat progression.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="sit_up",
         display_name="Sit-up",
         category=MovementCategory.GYMNASTICS,
@@ -1211,12 +1391,16 @@ register(
         movement_patterns=(
             MovementPattern.CORE_FLEXION,
         ),
+        muscle_groups=(
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=True,
         notes="Tracks all sit-up variations.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="russian_twist",
         display_name="Russian Twist",
         category=MovementCategory.GYMNASTICS,
@@ -1236,12 +1420,16 @@ register(
         movement_patterns=(
             MovementPattern.ROTATION,
         ),
+        muscle_groups=(
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=False,
         notes="Tracks all Russian Twist variations.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="v_up",
         display_name="V-Up",
         category=MovementCategory.GYMNASTICS,
@@ -1257,12 +1445,16 @@ register(
         movement_patterns=(
             MovementPattern.CORE_FLEXION,
         ),
+        muscle_groups=(
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=True,
         notes="Dynamic core flexion exercise.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="hollow_rock",
         display_name="Hollow Rock",
         category=MovementCategory.GYMNASTICS,
@@ -1278,12 +1470,16 @@ register(
         movement_patterns=(
             MovementPattern.CORE_FLEXION,
         ),
+        muscle_groups=(
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=True,
         notes="Dynamic hollow body progression.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="tuck_up",
         display_name="Tuck-up",
         category=MovementCategory.GYMNASTICS,
@@ -1301,12 +1497,16 @@ register(
         movement_patterns=(
             MovementPattern.CORE_FLEXION,
         ),
+        muscle_groups=(
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=False,
         notes="Dynamic core flexion exercise.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="windshield_wiper",
         display_name="Windshield Wiper",
         category=MovementCategory.GYMNASTICS,
@@ -1327,6 +1527,10 @@ register(
             MovementPattern.ROTATION,
             MovementPattern.CORE_FLEXION,
         ),
+        muscle_groups=(
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=False,
         notes="Advanced rotational core exercise.",
     )
 )
@@ -1336,7 +1540,7 @@ register(
 # ============================================================================
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="run",
         display_name="Run",
         category=MovementCategory.MONOSTRUCTURAL,
@@ -1362,12 +1566,18 @@ register(
         movement_patterns=(
             MovementPattern.LOCOMOTION,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.HAMSTRINGS,
+            MuscleGroup.CALVES,
+        ),
+        is_crossfit_movement=False,
         notes="All running variations.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="row",
         display_name="Row",
         category=MovementCategory.MONOSTRUCTURAL,
@@ -1387,12 +1597,18 @@ register(
         movement_patterns=(
             MovementPattern.LOCOMOTION,
         ),
+        muscle_groups=(
+            MuscleGroup.BACK,
+            MuscleGroup.LATS,
+            MuscleGroup.HAMSTRINGS,
+        ),
+        is_crossfit_movement=True,
         notes="RowErg / Concept2 rowing.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="ski",
         display_name="Ski",
         category=MovementCategory.MONOSTRUCTURAL,
@@ -1408,12 +1624,18 @@ register(
         movement_patterns=(
             MovementPattern.LOCOMOTION,
         ), 
+        muscle_groups=(
+            MuscleGroup.LATS,
+            MuscleGroup.SHOULDERS,
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=True,
         notes="Concept2 SkiErg.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="bike",
         display_name="Bike",
         category=MovementCategory.MONOSTRUCTURAL,
@@ -1434,12 +1656,18 @@ register(
         movement_patterns=(
             MovementPattern.LOCOMOTION,
         ),
+        muscle_groups=(
+            MuscleGroup.QUADRICEPS,
+            MuscleGroup.GLUTES,
+            MuscleGroup.HAMSTRINGS,
+        ),
+        is_crossfit_movement=True,
         notes="All bike ergometers.",
     )
 )
 
 register(
-    CrossFitMovement(
+    Movement(
         movement_id="jump_rope",
         display_name="Jump Rope",
         category=MovementCategory.MONOSTRUCTURAL,
@@ -1462,6 +1690,10 @@ register(
         movement_patterns=(
             MovementPattern.LOCOMOTION,
         ),
+        muscle_groups=(
+            MuscleGroup.CALVES,
+        ),
+        is_crossfit_movement=True,
         notes=(
             "Beginner: Single Unders\n"
             "Scaled: Double Unders\n"
@@ -1523,7 +1755,7 @@ validate_database()
 __all__ = [
     "AthleteLevel",
     "MovementCategory",
-    "CrossFitMovement",
+    "Movement",
     "MOVEMENTS",
     "MOVEMENT_BY_ID",
     "MOVEMENT_BY_ALIAS",

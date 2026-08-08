@@ -8,22 +8,22 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from .crossfit_movements import (
-    CrossFitMovement,
+from .movement_registry import (
+    Movement,
     find_movement,
 )
 
 
 def map_workout(
     exercises: Iterable[str],
-) -> list[CrossFitMovement]:
+) -> list[Movement]:
     """
     Maps exercise names to CrossFit movement families.
 
     Duplicate movement families are removed while preserving order.
     """
 
-    mapped: list[CrossFitMovement] = []
+    mapped: list[Movement] = []
     seen: set[str] = set()
 
     for exercise in exercises:

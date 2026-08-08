@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from services.movement_mapper import map_workout
-from services.crossfit_movements import CrossFitMovement
+from services.movement_registry import Movement
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class ExerciseEntry:
 class ParsedWorkout:
     original_text: str
     exercises: List[ExerciseEntry] = field(default_factory=list)
-    movements: List[CrossFitMovement] = field(default_factory=list)
+    movements: List[Movement] = field(default_factory=list)
 
 
 _REPS = re.compile(r"^\s*(\d+)\s+(.+)$")

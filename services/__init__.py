@@ -6,10 +6,11 @@ Services package.
 Central exports for the Sport KI App service layer.
 """
 
-from .crossfit_movements import (
+from .movement_registry import (
     AthleteLevel,
     MovementCategory,
-    CrossFitMovement,
+    MovementPattern,
+    MuscleGroup,
     MOVEMENTS,
     find_movement,
     get_movement,
@@ -22,12 +23,7 @@ from .movement_mapper import (
     map_workout,
     movement_ids,
     unknown_exercises,
-)
-
-from .coverage_analyzer import (
-    CoverageReport,
-    analyze_workouts,
-)
+)   
 
 from .movement_statistics import (
     MovementStatistic,
@@ -36,10 +32,4 @@ from .movement_statistics import (
     top_movements,
     untrained_movements,
     dashboard_summary,
-)
-
-from .workout_parser import (
-    ExerciseEntry,
-    ParsedWorkout,
-    parse_workout,
 )

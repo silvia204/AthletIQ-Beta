@@ -5,6 +5,8 @@ from typing import Any
 
 import pandas as pd
 
+from models.parsed_workout import ParsedWorkout
+
 
 def create_stable_hash(data: dict[str, Any]) -> str:
     """
@@ -74,22 +76,150 @@ def format_workout_as_text(
 
     workout_parts: list[str] = []
 
-    for exercise in exercises:
-        name = str(
-            exercise.get("name", "Unbekannte Übung")
-        ).strip()
+def format_workout_as_text(
+    parsed_workout: ParsedWorkout,
+) -> str:
+    """
+    Wandelt ein ParsedWorkout in einen lesbaren Text
+    für Google Sheets und die Trainingshistorie um.
+    """
 
-        details = str(
-            exercise.get("details", "")
-        ).strip()
+    workout_parts: list[str] = []
 
-        if not name:
+    for segment in parsed_workout.segments:
+        segment_parts: list[str] = []
+
+        for element in segment.elements:
+            name = str(
+                element.movement.raw_name
+                or element.movement.canonical_name
+                or "Unbekannte Übung"
+            ).strip()
+
+            details: list[str] = []
+
+            if element.sets is not None:
+                details.append(
+                    f"{element.sets} Sätze"
+                )
+
+            if element.reps is not None:
+                details.append(
+                    f"{element.reps} Wdh."
+                )
+
+            if element.distance is not None:
+                distance_text = (
+                    f"{element.distance:g}"
+                )
+
+                if element.distance_unit:
+                    distance_text += (
+                        f" {element.distance_unit}"
+                    )
+
+                details.append(distance_text)
+
+            if element.duration is not None:
+                duration_text = (
+                    f"{element.duration:g}"
+                )
+
+                if element.duration_unit:
+                    duration_text += (
+                        f" {element.duration_unit}"
+                    )
+
+                details.append(duration_text)
+
+            if element.calories is not None:
+                details.append(
+                    f"{element.calories} cal"
+                )
+
+            intensity = element.intensity
+
+            if intensity.weight is not None:
+                weight_text = (
+                    f"{intensity.weight:g}"
+                )
+
+                if intensity.weight_unit:
+                    weight_text += (
+                        f" {intensity.weight_unit}"
+                    )
+
+                details.append(weight_text)
+
+            if intensity.percent_1rm is not None:
+                details.append(
+                    f"{intensity.percent_1rm:g} % 1RM"
+                )
+
+            if intensity.prescribed_rpe is not None:
+                details.append(
+                    f"RPE {intensity.prescribed_rpe:g}"
+                )
+
+            if intensity.rir is not None:
+                details.append(
+                    f"RIR {intensity.rir}"
+                )
+
+            if intensity.tempo:
+                details.append(
+                    f"Tempo {intensity.tempo}"
+                )
+
+            if element.notes:
+                details.append(
+                    str(element.notes).strip()
+                )
+
+            if details:
+                segment_parts.append(
+                    f"{name}: {', '.join(details)}"
+                )
+            else:
+                segment_parts.append(name)
+
+        if not segment_parts:
             continue
 
-        if details:
-            workout_parts.append(f"{name}: {details}")
+        segment_label = str(
+            segment.name
+            or segment.type
+            or ""
+        ).strip()
+
+        segment_details: list[str] = []
+
+        if segment.rounds is not None:
+            segment_details.append(
+                f"{segment.rounds} Runden"
+            )
+
+        if segment.time_cap_minutes is not None:
+            segment_details.append(
+                f"Time Cap {segment.time_cap_minutes} Min."
+            )
+
+        if segment_label:
+            prefix = segment_label
+
+            if segment_details:
+                prefix += (
+                    f" ({', '.join(segment_details)})"
+                )
+
+            workout_parts.append(
+                f"{prefix}: "
+                + "; ".join(segment_parts)
+            )
         else:
-            workout_parts.append(name)
+            workout_parts.append(
+                "; ".join(segment_parts)
+            )
 
     return " | ".join(workout_parts)
 

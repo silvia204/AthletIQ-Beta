@@ -8,10 +8,9 @@ from services.utils import (
     safely_convert_to_int,
 )
 
-from services.workout_parser import parse_workout
 from services.movement_mapper import movement_ids
 from services.athlete_level import expected_ids
-from services.crossfit_movements import AthleteLevel
+from services.movement_registry import AthleteLevel
 
 
 DIMENSION_COLUMNS = {
@@ -1294,14 +1293,82 @@ def build_legacy_category_counts(
 
     return category_counts
 
+# def build_crossfit_movement_summary(
+#     history: pd.DataFrame,
+#     *,
+#     athlete_level: str = "scaled",
+# ) -> dict[str, Any]:
+#     """
+#     Erstellt eine Übersicht der trainierten CrossFit-Movements.
+#     """
+
+#     level_lookup = {
+#         "beginner": AthleteLevel.BEGINNER,
+#         "scaled": AthleteLevel.SCALED,
+#         "advanced": AthleteLevel.ADVANCED,
+#     }
+
+#     level = level_lookup.get(
+#         str(athlete_level).casefold(),
+#         AthleteLevel.SCALED,
+#     )
+
+#     expected = expected_ids(level)
+
+#     movement_counter: dict[str, int] = {}
+
+#     for _, row in history.iterrows():
+
+#         workout_text = str(
+#             row.get("workout", "")
+#         )
+
+#         parsed = parse_workout(workout_text)
+
+
+
+#         for movement in parsed.movements:
+
+#             movement_counter[movement.movement_id] = (
+#                 movement_counter.get(
+#                     movement.movement_id,
+#                     0,
+#                 )
+#                 + 1
+#             )
+
+#     completed = set(movement_counter.keys())
+
+#     missing = sorted(
+#         expected - completed
+#     )
+
+#     coverage = (
+#         round(
+#             len(completed & expected)
+#             / len(expected)
+#             * 100,
+#             1,
+#         )
+#         if expected
+#         else 100.0
+#     )
+
+#     return {
+#         "athlete_level": level.value,
+#         "movements": movement_counter,
+#         "completed": sorted(completed),
+#         "missing": missing,
+#         "covered": len(completed & expected),
+#         "expected": len(expected),
+#         "coverage_percent": coverage,
+#     }
+
 def build_crossfit_movement_summary(
     history: pd.DataFrame,
     *,
     athlete_level: str = "scaled",
 ) -> dict[str, Any]:
-    """
-    Erstellt eine Übersicht der trainierten CrossFit-Movements.
-    """
 
     level_lookup = {
         "beginner": AthleteLevel.BEGINNER,
@@ -1316,68 +1383,14 @@ def build_crossfit_movement_summary(
 
     expected = expected_ids(level)
 
-    movement_counter: dict[str, int] = {}
-
-    for _, row in history.iterrows():
-
-        workout_text = str(
-            row.get("workout", "")
-        )
-
-        parsed = parse_workout(workout_text)
-
-
-
-        parsed = parse_workout(workout_text)
-
-        print("=" * 80)
-        print(workout_text)
-
-        print("Übungen:")
-        print([e.exercise for e in parsed.exercises])
-
-        print("Movements:")
-        print([m.display_name for m in parsed.movements])
-
-
-
-
-
-        for movement in parsed.movements:
-
-            movement_counter[movement.movement_id] = (
-                movement_counter.get(
-                    movement.movement_id,
-                    0,
-                )
-                + 1
-            )
-
-    completed = set(movement_counter.keys())
-
-    missing = sorted(
-        expected - completed
-    )
-
-    coverage = (
-        round(
-            len(completed & expected)
-            / len(expected)
-            * 100,
-            1,
-        )
-        if expected
-        else 100.0
-    )
-
     return {
         "athlete_level": level.value,
-        "movements": movement_counter,
-        "completed": sorted(completed),
-        "missing": missing,
-        "covered": len(completed & expected),
+        "movements": {},
+        "completed": [],
+        "missing": sorted(expected),
+        "covered": 0,
         "expected": len(expected),
-        "coverage_percent": coverage,
+        "coverage_percent": 0.0,
     }
 
 def build_history_summary(

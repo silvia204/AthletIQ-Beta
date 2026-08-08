@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Set
 
-from .crossfit_movements import AthleteLevel, CrossFitMovement, MOVEMENTS
+from .movement_registry import AthleteLevel, Movement, MOVEMENTS
 
 _LEVEL_ORDER = {
     AthleteLevel.BEGINNER: 0,
@@ -24,13 +24,13 @@ class AthleteProfile:
     level: AthleteLevel
 
     @property
-    def expected_movements(self) -> List[CrossFitMovement]:
+    def expected_movements(self) -> List[Movement]:
         return expected_movements(self.level)
 
     def missing_movements(
         self,
         completed_movements: Set[str],
-    ) -> List[CrossFitMovement]:
+    ) -> List[Movement]:
         return [
             movement
             for movement in self.expected_movements
@@ -38,7 +38,7 @@ class AthleteProfile:
         ]
 
 
-def expected_movements(level: AthleteLevel) -> List[CrossFitMovement]:
+def expected_movements(level: AthleteLevel) -> List[Movement]:
     current = _LEVEL_ORDER[level]
     return sorted(
         [

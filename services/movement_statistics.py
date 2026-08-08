@@ -9,7 +9,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Tuple
 
-from .crossfit_movements import MOVEMENTS, MOVEMENT_BY_ID
+from .movement_registry import MOVEMENTS, MOVEMENT_BY_ID
 from .movement_mapper import map_workout
 
 
