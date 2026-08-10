@@ -51,6 +51,7 @@ def render_coach_dashboard(
     positive_observations: list[str],
     weekly_focus: dict[str, str],
     coach_text: str,
+    daily_coach_tips: dict[str, str],
     load_trend: dict[str, Any],
     consistency: dict[str, Any],
     diversity: dict[str, Any],
@@ -69,75 +70,200 @@ def render_coach_dashboard(
 
     st.markdown("### Mein Trainings-Co-Pilot")
     st.caption(
-        "Einordnung deines tatsächlich absolvierten Trainings – als Ergänzung zu deinem bestehenden Plan oder Gym-Programming."
+        "Einordnung deines tatsächlich absolvierten Trainings – "
+        "als Ergänzung zu deinem bestehenden Plan oder Gym-Programming."
+    )
+
+    # ----------------------------------------------------
+    # AKTUELLE BELASTBARKEIT
+    # ----------------------------------------------------
+
+    readiness_detail = (
+        readiness.get("detail")
+        or (
+            "Aktuell gibt es keine Hinweise, die eine Anpassung "
+            "deines geplanten Trainings erforderlich machen."
+        )
     )
 
     st.markdown(
         (
-            f'<div class="readiness-card {_safe(readiness.get("css_class"), "readiness-good")}">'
-            '<div class="muted-label">AKTUELLE BELASTBARKEIT</div>'
-            f'<div class="readiness-title">{_safe(readiness.get("icon"), "🟢")} '
-            f'{_safe(readiness.get("label"), "Trainingsstatus")}</div>'
-            f'<div>{_safe(readiness.get("detail"))}</div>'
-            "</div>"
+            f'<div class="readiness-card '
+            f'{_safe(readiness.get("css_class"), "readiness-good")}">'
+            '<div class="muted-label">'
+            'AKTUELLE BELASTBARKEIT'
+            '</div>'
+            '<div class="readiness-title">'
+            f'{_safe(readiness.get("icon"), "🟢")} '
+            f'{_safe(readiness.get("label"), "Trainingsstatus")}'
+            '</div>'
+            '<div class="readiness-detail">'
+            f'{_safe(readiness_detail)}'
+            '</div>'
+            '</div>'
         ),
         unsafe_allow_html=True,
     )
 
-    st.markdown("#### Entscheidung für das nächste geplante Training")
-    guidance_left, guidance_right = st.columns([1.15, 1], gap="large")
+    # ----------------------------------------------------
+    # ENTSCHEIDUNG FÜR DAS NÄCHSTE TRAINING
+    # ----------------------------------------------------
+
+    st.markdown(
+        "#### Entscheidung für dein nächstes geplantes Training"
+    )
+
+    guidance_left, guidance_right = st.columns(
+        2,
+        gap="medium",
+    )
 
     with guidance_left:
-        with st.container(border=True):
-            st.markdown("##### Umgang mit deinem Plan")
-            st.markdown(
-                readiness.get("plan_guidance")
-                or "Folge grundsätzlich deinem bestehenden Trainingsplan."
+
+        plan_guidance = (
+            readiness.get("plan_guidance")
+            or "Folge grundsätzlich deinem bestehenden Trainingsplan."
+        )
+
+        avoid = readiness.get("avoid")
+
+        plan_content = (
+            '<div class="focus-card plan-card">'
+            '<div class="muted-label">'
+            'DEIN BESTEHENDER PLAN'
+            '</div>'
+            '<div class="readiness-title">'
+            'Plan wie vorgesehen durchführen'
+            '</div>'
+            '<div class="card-detail">'
+            f'{_safe(plan_guidance)}'
+            '</div>'
+        )
+
+        if avoid:
+            plan_content += (
+                '<div class="card-note">'
+                '<strong>Aktuell vermeiden:</strong> '
+                f'{_safe(avoid)}'
+                '</div>'
             )
-            avoid = readiness.get("avoid")
-            if avoid:
-                st.markdown(f"**Aktuell vermeiden:** {avoid}")
+
+        plan_content += "</div>"
+
+        st.markdown(
+            plan_content,
+            unsafe_allow_html=True,
+        )
+
 
     with guidance_right:
+
+        focus_title = _safe(
+            weekly_focus.get("title"),
+            "Aktueller Fokus",
+        )
+
+        focus_text = (
+            weekly_focus.get("text")
+            or (
+                "Wenn es zu deiner geplanten Einheit passt, "
+                "berücksichtige aktuell wenig trainierte Bereiche."
+            )
+        )
+
         st.markdown(
             (
-                '<div class="focus-card">'
-                '<div class="muted-label">RELEVANTE ERGÄNZUNG</div>'
-                f'<div class="readiness-title">{_safe(weekly_focus.get("title"), "Aktueller Fokus")}</div>'
-                f'<div>{_safe(weekly_focus.get("text"))}</div>'
-                "</div>"
+                '<div class="focus-card supplement-card">'
+                '<div class="muted-label">'
+                'SINNVOLLE ERGÄNZUNG'
+                '</div>'
+                '<div class="readiness-title">'
+                f'{focus_title}'
+                '</div>'
+                '<div class="card-detail">'
+                f'{_safe(focus_text)}'
+                '</div>'
+                '</div>'
             ),
             unsafe_allow_html=True,
         )
 
-    sections = split_coach_feedback(coach_text)
+    # ----------------------------------------------------
+    # TÄGLICHE COACH-TIPPS
+    # ----------------------------------------------------
 
-    st.markdown("#### Coach-Einordnung")
-    with st.container(border=True):
+    st.markdown("#### Deine Tipps für heute")
+
+    training_tip = _safe(
+        daily_coach_tips.get("training"),
+        "Folge deinem bestehenden Trainingsplan.",
+    )
+
+    nutrition_tip = _safe(
+        daily_coach_tips.get("nutrition"),
+        "Versorge dich passend zu deiner Trainingsbelastung.",
+    )
+
+    recovery_tip = _safe(
+        daily_coach_tips.get("recovery"),
+        "Plane Erholung passend zu deiner aktuellen Belastung ein.",
+    )
+
+    tip_training, tip_nutrition, tip_recovery = (
+        st.columns(
+            3,
+            gap="medium",
+        )
+    )
+
+    with tip_training:
         st.markdown(
-            sections["summary"]
-            or "Mit weiteren gespeicherten Einheiten kann ich Abweichungen und Entwicklungen zuverlässiger einordnen."
+            (
+                '<div class="daily-tip-card">'
+                '<div class="muted-label">TRAINING</div>'
+                '<div class="daily-tip-title">'
+                'Accessories'
+                '</div>'
+                '<div class="daily-tip-text">'
+                f'{training_tip}'
+                '</div>'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
         )
 
-    st.markdown("#### Empfehlung für dein nächstes Training")
-    fallback = (
-        "- **Einordnung:** Folge grundsätzlich deinem bestehenden Plan.\n"
-        f'- **Optionale Ergänzung:** {weekly_focus.get("session", "Kein zusätzlicher Reiz erforderlich.")}\n'
-        "- **Hinweis:** Die Ergänzung ersetzt weder das Programming noch eine geplante Haupteinheit."
-    )
-    with st.container(border=True):
-        st.markdown(sections["next_session"] or fallback)
+    with tip_nutrition:
+        st.markdown(
+            (
+                '<div class="daily-tip-card">'
+                '<div class="muted-label">ERNÄHRUNG</div>'
+                '<div class="daily-tip-title">'
+                'Fuel für heute'
+                '</div>'
+                '<div class="daily-tip-text">'
+                f'{nutrition_tip}'
+                '</div>'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
 
-    st.markdown("#### Das läuft aktuell gut")
-    positive_columns = st.columns(min(max(len(positive_observations[:3]), 1), 3))
-    observations = positive_observations[:3] or [
-        "Mit weiteren gespeicherten Einheiten werden belastbare positive Muster sichtbar."
-    ]
-    for index, observation in enumerate(observations):
-        with positive_columns[index % len(positive_columns)]:
-            with st.container(border=True):
-                st.markdown(f"**{index + 1:02d}**")
-                st.markdown(observation)
+    with tip_recovery:
+        st.markdown(
+            (
+                '<div class="daily-tip-card">'
+                '<div class="muted-label">RECOVERY</div>'
+                '<div class="daily-tip-title">'
+                'Erholung im Blick'
+                '</div>'
+                '<div class="daily-tip-text">'
+                f'{recovery_tip}'
+                '</div>'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
+
 
     st.markdown("#### Entwicklung auf einen Blick")
     c1, c2, c3, c4 = st.columns(4)

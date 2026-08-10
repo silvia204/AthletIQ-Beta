@@ -28,14 +28,31 @@ def validate_parsed_workout(
             "ParsedWorkout enthält keine Segmente."
         )
 
-    for segment in parsed_workout.segments:
+    for segment_index, segment in enumerate(
+        parsed_workout.segments
+    ):
 
         if not segment.elements:
             continue
 
-        for element in segment.elements:
+        for element_index, element in enumerate(
+            segment.elements
+        ):
 
-            if not element.movement.raw_name.strip():
+            raw_name = (
+                element.movement.raw_name or ""
+            ).strip()
+
+            canonical_name = (
+                element.movement.canonical_name or ""
+            ).strip()
+
+            if not raw_name:
                 raise ValueError(
-                    "Movement ohne Namen gefunden."
+                    "Movement ohne raw_name gefunden. "
+                    f"Segment {segment_index + 1}, "
+                    f"Element {element_index + 1}: "
+                    f"raw_name={element.movement.raw_name!r}, "
+                    f"canonical_name="
+                    f"{element.movement.canonical_name!r}"
                 )

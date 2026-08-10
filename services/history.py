@@ -1293,82 +1293,18 @@ def build_legacy_category_counts(
 
     return category_counts
 
-# def build_crossfit_movement_summary(
-#     history: pd.DataFrame,
-#     *,
-#     athlete_level: str = "scaled",
-# ) -> dict[str, Any]:
-#     """
-#     Erstellt eine Übersicht der trainierten CrossFit-Movements.
-#     """
-
-#     level_lookup = {
-#         "beginner": AthleteLevel.BEGINNER,
-#         "scaled": AthleteLevel.SCALED,
-#         "advanced": AthleteLevel.ADVANCED,
-#     }
-
-#     level = level_lookup.get(
-#         str(athlete_level).casefold(),
-#         AthleteLevel.SCALED,
-#     )
-
-#     expected = expected_ids(level)
-
-#     movement_counter: dict[str, int] = {}
-
-#     for _, row in history.iterrows():
-
-#         workout_text = str(
-#             row.get("workout", "")
-#         )
-
-#         parsed = parse_workout(workout_text)
-
-
-
-#         for movement in parsed.movements:
-
-#             movement_counter[movement.movement_id] = (
-#                 movement_counter.get(
-#                     movement.movement_id,
-#                     0,
-#                 )
-#                 + 1
-#             )
-
-#     completed = set(movement_counter.keys())
-
-#     missing = sorted(
-#         expected - completed
-#     )
-
-#     coverage = (
-#         round(
-#             len(completed & expected)
-#             / len(expected)
-#             * 100,
-#             1,
-#         )
-#         if expected
-#         else 100.0
-#     )
-
-#     return {
-#         "athlete_level": level.value,
-#         "movements": movement_counter,
-#         "completed": sorted(completed),
-#         "missing": missing,
-#         "covered": len(completed & expected),
-#         "expected": len(expected),
-#         "coverage_percent": coverage,
-#     }
-
 def build_crossfit_movement_summary(
     history: pd.DataFrame,
     *,
     athlete_level: str = "scaled",
 ) -> dict[str, Any]:
+    """
+    Erstellt eine Übersicht der trainierten CrossFit-Movements
+    aus den gespeicherten Analyseergebnissen.
+
+    Grundlage ist ausschließlich crossfit_movements_json.
+    Historische Workout-Texte werden nicht erneut geparst.
+    """
 
     level_lookup = {
         "beginner": AthleteLevel.BEGINNER,
@@ -1383,14 +1319,101 @@ def build_crossfit_movement_summary(
 
     expected = expected_ids(level)
 
+    movement_counter: dict[str, int] = {}
+
+    if (
+        not history.empty
+        and "crossfit_movements_json"
+        in history.columns
+    ):
+        for _, row in history.iterrows():
+
+            movement_data = (
+                json_loads_from_sheet(
+                    row.get(
+                        "crossfit_movements_json",
+                        "",
+                    ),
+                    default={},
+                )
+            )
+
+            if not isinstance(
+                movement_data,
+                dict,
+            ):
+                continue
+
+            for movement_id, raw_count in (
+                movement_data.items()
+            ):
+                movement_id = str(
+                    movement_id
+                ).strip()
+
+                if not movement_id:
+                    continue
+
+                try:
+                    count = int(
+                        raw_count
+                    )
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    continue
+
+                if count <= 0:
+                    continue
+
+                movement_counter[
+                    movement_id
+                ] = (
+                    movement_counter.get(
+                        movement_id,
+                        0,
+                    )
+                    + count
+                )
+
+    completed = set(
+        movement_counter.keys()
+    )
+
+    covered_movements = (
+        completed & expected
+    )
+
+    missing = sorted(
+        expected - completed
+    )
+
+    coverage = (
+        round(
+            len(covered_movements)
+            / len(expected)
+            * 100,
+            1,
+        )
+        if expected
+        else 100.0
+    )
+
     return {
         "athlete_level": level.value,
-        "movements": {},
-        "completed": [],
-        "missing": sorted(expected),
-        "covered": 0,
-        "expected": len(expected),
-        "coverage_percent": 0.0,
+        "movements": movement_counter,
+        "completed": sorted(
+            completed
+        ),
+        "missing": missing,
+        "covered": len(
+            covered_movements
+        ),
+        "expected": len(
+            expected
+        ),
+        "coverage_percent": coverage,
     }
 
 def build_history_summary(

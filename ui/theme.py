@@ -245,13 +245,29 @@ Elemente innerhalb des Metric-Wertes angesprochen.
 }}
 
 .focus-card {{
-    padding: 1.1rem 1.2rem;
-    border-radius: var(--app-radius-lg);
-    border:1px solid var(--border-color);
-    border-left:5px solid var(--accent-border);
-    background:var(--surface-2);
-    min-height: 152px;
-    font-size: 0.95rem;
+    min-height: 150px;
+    padding: 20px 22px;
+    border: 1px solid rgba(120, 130, 145, 0.25);
+    border-radius: 18px;
+    box-sizing: border-box;
+}}
+
+.plan-card {{
+    border-left: 5px solid #a0aec0;
+}}
+
+.supplement-card {{
+    border-left: 5px solid #718096;
+}}
+
+.card-detail {{
+    margin-top: 8px;
+    line-height: 1.5;
+}}
+
+.card-note {{
+    margin-top: 12px;
+    font-size: 0.92rem;
 }}
 
 .positive-card {{
@@ -262,6 +278,39 @@ Elemente innerhalb des Metric-Wertes angesprochen.
     margin-bottom: 0.6rem;
     font-size: 0.95rem;
 }}
+
+
+.daily-tip-card {{
+    width: 100%;
+    min-height: 165px;
+    padding: 20px 22px;
+    border: 1px solid rgba(120, 130, 145, 0.25);
+    border-radius: 18px;
+    box-sizing: border-box;
+    text-align: left;
+}}
+
+.daily-tip-label {{
+    width: 100%;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    opacity: 0.58;
+    margin-bottom: 8px;
+}}
+
+.daily-tip-title {{
+    width: 100%;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}}
+
+.daily-tip-text {{
+    width: 100%;
+    line-height: 1.5;
+}}
+
 </style>
 """
 

@@ -1,5 +1,5 @@
-import base64
 import html
+from copy import deepcopy
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
@@ -10,16 +10,13 @@ from streamlit_gsheets import GSheetsConnection
 
 from services.analysis import analyze_workout
 from services.history_analysis import analyze_history
-from services.date_utils import (
-    normalize_training_dates,
-    format_training_dates,
-)
 from services.parser import parse_workout
 from services.trends import build_trends
 from services.training_balance import build_training_balance
 
 from services.coach import (
     build_coach_feedback,
+    build_daily_tips,
 )
 
 from services.date_utils import (
@@ -35,14 +32,12 @@ from services.history import (
     get_user_training_history,
     remove_current_workout_from_history,
 )
-from services.mistral_service import call_mistral
 
 from services.scoring import (
     calculate_load_score,
     calculate_structural_score,
     get_level_factor,
     get_load_status,
-    calculate_classification_dimensions,
 )
 from services.sheets import (
     read_workout_history,
@@ -55,7 +50,6 @@ from services.utils import (
     safely_convert_to_int,
 )
 
-from ui.coach_dashboard import render_coach_dashboard
 from ui.theme import apply_theme
 
 
@@ -196,9 +190,15 @@ DEFAULT_SESSION_STATE = {
     "letzte_workout_klassifikation": None,
     "letzte_trainingsdimensionen": None,
     "letzter_coach_text": None,
+    "letzte_daily_coach_tips": None,
     "letzter_state_key": None,
     "letzter_save_key": None,
     "letzte_trainingsanalyse": None,
+    "parsed_workout": None,
+    "deterministic_analysis": None,
+    "workout_interpretation": None,
+    "original_parsed_workout": None,
+    "workout_editor_open": False,
     "pending_save": False,
     "save_notice": None,
 }
@@ -554,6 +554,446 @@ def render_balance_dimension(
         f"{over} überrepräsentiert"
     )
 
+
+def format_workout_element_details(
+    element: Any,
+) -> str:
+    """
+    Formatiert ausschließlich die im ParsedWorkout vorhandenen
+    Rohdaten eines Workout-Elements für die Anzeige.
+    """
+
+    details: list[str] = []
+
+    sets = getattr(element, "sets", None)
+    reps = getattr(element, "reps", None)
+
+    if sets is not None and reps is not None:
+        details.append(f"{sets} Sets × {reps} Reps")
+    elif sets is not None:
+        details.append(f"{sets} Sets")
+    elif reps is not None:
+        details.append(f"{reps} Reps")
+
+    intensity = getattr(element, "intensity", None)
+
+    if intensity is not None:
+        weight = getattr(intensity, "weight", None)
+        weight_unit = getattr(intensity, "weight_unit", None)
+
+        if weight is not None:
+            weight_text = f"{weight:g}" if isinstance(weight, (int, float)) else str(weight)
+            if weight_unit:
+                weight_text += f" {weight_unit}"
+            details.append(weight_text)
+
+        percent_1rm = getattr(intensity, "percent_1rm", None)
+        if percent_1rm is not None:
+            details.append(f"{percent_1rm:g} % 1RM")
+
+        prescribed_rpe = getattr(intensity, "prescribed_rpe", None)
+        if prescribed_rpe is not None:
+            details.append(f"RPE {prescribed_rpe:g}")
+
+        rir = getattr(intensity, "rir", None)
+        if rir is not None:
+            details.append(f"RIR {rir}")
+
+        tempo = getattr(intensity, "tempo", None)
+        if tempo:
+            details.append(f"Tempo {tempo}")
+
+    distance = getattr(element, "distance", None)
+    distance_unit = getattr(element, "distance_unit", None)
+    if distance is not None:
+        distance_text = f"{distance:g}" if isinstance(distance, (int, float)) else str(distance)
+        if distance_unit:
+            distance_text += f" {distance_unit}"
+        details.append(distance_text)
+
+    duration = getattr(element, "duration", None)
+    duration_unit = getattr(element, "duration_unit", None)
+    if duration is not None:
+        duration_text = f"{duration:g}" if isinstance(duration, (int, float)) else str(duration)
+        if duration_unit:
+            duration_text += f" {duration_unit}"
+        details.append(duration_text)
+
+    calories = getattr(element, "calories", None)
+    if calories is not None:
+        details.append(f"{calories} Cal")
+
+    notes = str(getattr(element, "notes", None) or "").strip()
+    if notes:
+        details.append(notes)
+
+    return " · ".join(details)
+
+
+def render_current_workout(
+    parsed_workout: Any,
+) -> None:
+    """
+    Zeigt die Struktur des ParsedWorkout vollständig genug für
+    eine visuelle Kontrolle nach Text- oder Fotoeingabe.
+    """
+
+    for segment in parsed_workout.segments:
+        segment_type = str(getattr(segment, "type", "") or "").strip()
+        segment_name = str(getattr(segment, "name", "") or "").strip()
+
+        if segment_name and segment_type and segment_name.casefold() != segment_type.casefold():
+            heading = f"{segment_name} · {segment_type}"
+        else:
+            heading = segment_name or segment_type or "Workout"
+
+        st.markdown(f"#### {heading}")
+
+        segment_details: list[str] = []
+
+        rounds = getattr(segment, "rounds", None)
+        if rounds is not None:
+            segment_details.append(f"{rounds} Runden")
+
+        time_cap = getattr(segment, "time_cap_minutes", None)
+        if time_cap is not None:
+            segment_details.append(f"Time Cap: {time_cap} Min.")
+
+        segment_notes = str(getattr(segment, "notes", None) or "").strip()
+        if segment_notes:
+            segment_details.append(segment_notes)
+
+        if segment_details:
+            st.caption(" · ".join(segment_details))
+
+        if not segment.elements:
+            st.caption("Keine einzelnen Workout-Elemente erkannt.")
+            continue
+
+        for element in segment.elements:
+            exercise_name = (
+                getattr(element.movement, "raw_name", None)
+                or getattr(element.movement, "canonical_name", None)
+                or "Unbekannte Übung"
+            )
+
+            exercise_details = format_workout_element_details(element)
+
+            if exercise_details:
+                st.markdown(
+                    f"- **{exercise_name}** — {exercise_details}"
+                )
+            else:
+                st.markdown(f"- **{exercise_name}**")
+
+
+
+def optional_number_input(
+    label: str,
+    value: int | float | None,
+    *,
+    key: str,
+    step: int | float = 1,
+) -> int | float | None:
+    """
+    Editiert optionale Zahlenwerte. Ein leeres Feld bedeutet None.
+    """
+
+    raw_value = st.text_input(
+        label,
+        value="" if value is None else str(value),
+        key=key,
+    ).strip()
+
+    if not raw_value:
+        return None
+
+    try:
+        number = float(raw_value.replace(",", "."))
+    except ValueError:
+        st.warning(f"„{label}“ muss eine Zahl oder leer sein.")
+        return value
+
+    if isinstance(step, int):
+        return int(number)
+
+    return number
+
+
+def render_workout_editor(
+    parsed_workout: Any,
+) -> bool:
+    """
+    Struktureller Editor für das aktuell erkannte ParsedWorkout.
+
+    Rückgabe:
+        True, wenn Änderungen übernommen wurden.
+    """
+
+    st.markdown("### Workout bearbeiten")
+    st.caption(
+        "Entferne nicht absolvierte Scaling-Optionen oder korrigiere "
+        "erkannte Werte. Nur die übernommene Version wird anschließend "
+        "analysiert und gespeichert."
+    )
+
+    segments_to_delete: set[int] = set()
+    elements_to_delete: dict[int, set[int]] = {}
+    edited_values: dict[tuple, Any] = {}
+
+    for segment_index, segment in enumerate(parsed_workout.segments):
+        with st.container(border=True):
+            top_left, top_right = st.columns([4, 1])
+
+            with top_left:
+                segment_name = st.text_input(
+                    "Segmentname",
+                    value=str(segment.name or ""),
+                    key=f"edit_segment_name_{segment_index}",
+                )
+                segment_type = st.text_input(
+                    "Workoutart / Segmenttyp",
+                    value=str(segment.type or ""),
+                    key=f"edit_segment_type_{segment_index}",
+                )
+
+            with top_right:
+                delete_segment = st.checkbox(
+                    "Segment löschen",
+                    key=f"delete_segment_{segment_index}",
+                )
+                if delete_segment:
+                    segments_to_delete.add(segment_index)
+
+            rounds = optional_number_input(
+                "Runden",
+                segment.rounds,
+                key=f"edit_rounds_{segment_index}",
+                step=1,
+            )
+            time_cap = optional_number_input(
+                "Time Cap (Min.)",
+                segment.time_cap_minutes,
+                key=f"edit_time_cap_{segment_index}",
+                step=1,
+            )
+            segment_notes = st.text_input(
+                "Segment-Notiz",
+                value=str(segment.notes or ""),
+                key=f"edit_segment_notes_{segment_index}",
+            )
+
+            edited_values[("segment", segment_index)] = {
+                "name": segment_name.strip() or None,
+                "type": segment_type.strip() or "unknown",
+                "rounds": rounds,
+                "time_cap_minutes": time_cap,
+                "notes": segment_notes.strip() or None,
+            }
+
+            st.markdown("**Movements**")
+
+            for element_index, element in enumerate(segment.elements):
+                with st.expander(
+                    (
+                        element.movement.raw_name
+                        or element.movement.canonical_name
+                        or f"Movement {element_index + 1}"
+                    ),
+                    expanded=False,
+                ):
+                    delete_element = st.checkbox(
+                        "Movement löschen",
+                        key=f"delete_element_{segment_index}_{element_index}",
+                    )
+                    if delete_element:
+                        elements_to_delete.setdefault(
+                            segment_index, set()
+                        ).add(element_index)
+
+                    movement_name = st.text_input(
+                        "Movement",
+                        value=str(element.movement.raw_name or ""),
+                        key=f"edit_movement_{segment_index}_{element_index}",
+                    )
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        sets = optional_number_input(
+                            "Sets",
+                            element.sets,
+                            key=f"edit_sets_{segment_index}_{element_index}",
+                            step=1,
+                        )
+                        reps = optional_number_input(
+                            "Reps",
+                            element.reps,
+                            key=f"edit_reps_{segment_index}_{element_index}",
+                            step=1,
+                        )
+                    with col2:
+                        weight = optional_number_input(
+                            "Gewicht",
+                            element.intensity.weight,
+                            key=f"edit_weight_{segment_index}_{element_index}",
+                            step=0.5,
+                        )
+                        weight_unit = st.text_input(
+                            "Gewichtseinheit",
+                            value=str(element.intensity.weight_unit or ""),
+                            key=f"edit_weight_unit_{segment_index}_{element_index}",
+                        )
+                    with col3:
+                        distance = optional_number_input(
+                            "Distanz",
+                            element.distance,
+                            key=f"edit_distance_{segment_index}_{element_index}",
+                            step=1.0,
+                        )
+                        distance_unit = st.text_input(
+                            "Distanzeinheit",
+                            value=str(element.distance_unit or ""),
+                            key=f"edit_distance_unit_{segment_index}_{element_index}",
+                        )
+
+                    duration = optional_number_input(
+                        "Dauer",
+                        element.duration,
+                        key=f"edit_duration_{segment_index}_{element_index}",
+                        step=1.0,
+                    )
+                    duration_unit = st.text_input(
+                        "Dauereinheit",
+                        value=str(element.duration_unit or ""),
+                        key=f"edit_duration_unit_{segment_index}_{element_index}",
+                    )
+                    calories = optional_number_input(
+                        "Calories",
+                        element.calories,
+                        key=f"edit_calories_{segment_index}_{element_index}",
+                        step=1,
+                    )
+                    notes = st.text_input(
+                        "Movement-Notiz",
+                        value=str(element.notes or ""),
+                        key=f"edit_element_notes_{segment_index}_{element_index}",
+                    )
+
+                    edited_values[
+                        ("element", segment_index, element_index)
+                    ] = {
+                        "movement": movement_name.strip(),
+                        "sets": sets,
+                        "reps": reps,
+                        "weight": weight,
+                        "weight_unit": weight_unit.strip() or None,
+                        "distance": distance,
+                        "distance_unit": distance_unit.strip() or None,
+                        "duration": duration,
+                        "duration_unit": duration_unit.strip() or None,
+                        "calories": calories,
+                        "notes": notes.strip() or None,
+                    }
+
+    apply_col, restore_col, cancel_col = st.columns(3)
+
+    apply_clicked = apply_col.button(
+        "Änderungen übernehmen",
+        type="primary",
+        width="stretch",
+        key="apply_workout_edits",
+    )
+    restore_clicked = restore_col.button(
+        "Original wiederherstellen",
+        width="stretch",
+        key="restore_original_workout",
+    )
+    cancel_clicked = cancel_col.button(
+        "Abbrechen",
+        width="stretch",
+        key="cancel_workout_edits",
+    )
+
+    if restore_clicked:
+        original = st.session_state.get("original_parsed_workout")
+        if original is not None:
+            st.session_state["parsed_workout"] = deepcopy(original)
+            st.session_state["workout_editor_open"] = False
+            st.session_state["letzter_coach_text"] = None
+            st.session_state["letzter_state_key"] = None
+            st.session_state["letzter_save_key"] = None
+            st.session_state["pending_save"] = False
+            st.rerun()
+
+    if cancel_clicked:
+        st.session_state["workout_editor_open"] = False
+        st.rerun()
+
+    if not apply_clicked:
+        return False
+
+    for segment_index, segment in enumerate(parsed_workout.segments):
+        if segment_index in segments_to_delete:
+            continue
+
+        values = edited_values[("segment", segment_index)]
+        segment.name = values["name"]
+        segment.type = values["type"]
+        segment.rounds = values["rounds"]
+        segment.time_cap_minutes = values["time_cap_minutes"]
+        segment.notes = values["notes"]
+
+        kept_elements = []
+
+        for element_index, element in enumerate(segment.elements):
+            if element_index in elements_to_delete.get(segment_index, set()):
+                continue
+
+            values = edited_values[
+                ("element", segment_index, element_index)
+            ]
+
+            element.movement.raw_name = values["movement"]
+            element.movement.canonical_name = values["movement"]
+            element.sets = values["sets"]
+            element.reps = values["reps"]
+            element.intensity.weight = values["weight"]
+            element.intensity.weight_unit = values["weight_unit"]
+            element.distance = values["distance"]
+            element.distance_unit = values["distance_unit"]
+            element.duration = values["duration"]
+            element.duration_unit = values["duration_unit"]
+            element.calories = values["calories"]
+            element.notes = values["notes"]
+
+            kept_elements.append(element)
+
+        segment.elements = kept_elements
+
+    parsed_workout.segments = [
+        segment
+        for index, segment in enumerate(parsed_workout.segments)
+        if index not in segments_to_delete
+    ]
+
+    if not parsed_workout.segments:
+        st.error("Das Workout muss mindestens ein Segment enthalten.")
+        return False
+
+    if not any(segment.elements for segment in parsed_workout.segments):
+        st.error("Das Workout muss mindestens ein Movement enthalten.")
+        return False
+
+    st.session_state["parsed_workout"] = parsed_workout
+    st.session_state["workout_editor_open"] = False
+    st.session_state["letzter_coach_text"] = None
+    st.session_state["letzter_state_key"] = None
+    st.session_state["letzter_save_key"] = None
+    st.session_state["pending_save"] = False
+
+    return True
+
+
 def reset_current_workout() -> None:
     st.session_state[
         "letzter_workout_input"
@@ -584,6 +1024,26 @@ def reset_current_workout() -> None:
     ] = None
 
     st.session_state[
+        "parsed_workout"
+    ] = None
+    
+    st.session_state[
+        "original_parsed_workout"
+    ] = None
+
+    st.session_state[
+        "workout_editor_open"
+    ] = False
+
+    st.session_state[
+        "deterministic_analysis"
+    ] = None
+
+    st.session_state[
+        "workout_interpretation"
+    ] = None
+
+    st.session_state[
         "pending_save"
     ] = False
 
@@ -605,50 +1065,8 @@ def reset_current_workout() -> None:
 
 
 # ============================================================
-# PROMPT FÜR WORKOUT-ERKENNUNG
+# STATUS-HILFSFUNKTIONEN
 # ============================================================
-
-WORKOUT_EXTRACTION_PROMPT = """
-Du bist der präzise Daten-Assistent einer Sport-App für
-CrossFit, Hyrox und Laufen.
-
-Analysiere die bereitgestellten Workout-Daten exakt.
-
-STRUKTURREGELN:
-
-1. Kraftteile oder klar getrennte Einzelübungen, zum Beispiel
-   Deadlifts oder Squats, kommen als jeweils eigenes Objekt
-   in die Liste.
-
-2. Zusammengehörige komplexe Workouts wie AMRAP, RFT, EMOM,
-   Chipper oder For Time dürfen nicht in unabhängige
-   Einzelübungen zerlegt werden.
-
-3. Erstelle für ein komplexes Workout genau ein Objekt.
-   Verwende als Namen beispielsweise:
-   "AMRAP 20", "5 RFT", "EMOM 12" oder "For Time".
-
-4. Führe die enthaltenen Übungen, Wiederholungen, Distanzen,
-   Gewichte und Zeitlimits vollständig im Feld "details" auf.
-
-5. Erfinde keine Gewichte, Wiederholungen oder Übungen.
-
-Antworte ausschließlich als gültiges JSON in diesem Format:
-
-{
-  "workout_erkannt": true,
-  "uebungen": [
-    {
-      "name": "Name der Übung oder des Workouts",
-      "details": "Sätze, Wiederholungen, Gewichte, Distanzen oder Workout-Inhalt"
-    }
-  ]
-}
-
-Antworte ohne Markdown-Codeblock und ohne zusätzlichen Text.
-""".strip()
-
-
 
 def summarize_balance_dimension(
     items: list[dict],
@@ -900,7 +1318,6 @@ with tab1:
         )
 
         content_payload = ""
-
         if (
             input_type
             == "Foto hochladen / machen"
@@ -930,31 +1347,6 @@ with tab1:
                     or "image/jpeg"
                 )
 
-                encoded_image = (
-                    base64.b64encode(
-                        photo.getvalue()
-                    ).decode("utf-8")
-                )
-
-                content_payload = [
-                    {
-                        "type": "text",
-                        "text": (
-                            WORKOUT_EXTRACTION_PROMPT
-                        ),
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": (
-                            f"data:{mime_type};base64,"
-                            f"{encoded_image}"
-                        ),
-                    },
-                ]
-
-                model_to_use = (
-                    MISTRAL_VISION_MODEL
-                )
 
         else:
             workout_text_input = (
@@ -981,17 +1373,6 @@ with tab1:
                 width="stretch",
             )
 
-            if should_analyze:
-                content_payload = (
-                    f"{WORKOUT_EXTRACTION_PROMPT}\n\n"
-                    "Hier sind die zu analysierenden "
-                    "Workout-Daten:\n\n"
-                    f"{workout_text_input.strip()}"
-                )
-
-                model_to_use = (
-                    MISTRAL_TEXT_MODEL
-                )
 
         if should_analyze:
             with st.spinner(
@@ -999,11 +1380,25 @@ with tab1:
                 "und geprüft ..."
             ):
                 try:
-                    parsed_workout = parse_workout(
-                        workout_text=workout_text_input.strip(),
-                        api_key=MISTRAL_API_KEY,
-                        model=MISTRAL_TEXT_MODEL,
-                    )
+                    if (
+                        input_type
+                        == "Foto hochladen / machen"
+                    ):
+                        parsed_workout = parse_workout(
+                            image_data=photo.getvalue(),
+                            image_mime_type=(
+                                getattr(photo, "type", None)
+                                or "image/jpeg"
+                            ),
+                            api_key=MISTRAL_API_KEY,
+                            model=MISTRAL_VISION_MODEL,
+                        )
+                    else:
+                        parsed_workout = parse_workout(
+                            workout_text=workout_text_input.strip(),
+                            api_key=MISTRAL_API_KEY,
+                            model=MISTRAL_TEXT_MODEL,
+                        )
 
                     deterministic_analysis, workout_interpretation = analyze_workout(
                         parsed_workout=parsed_workout,
@@ -1013,6 +1408,10 @@ with tab1:
                     )
 
                     st.session_state["parsed_workout"] = parsed_workout
+                    st.session_state["original_parsed_workout"] = deepcopy(
+                        parsed_workout
+                    )
+                    st.session_state["workout_editor_open"] = False
                     st.session_state["deterministic_analysis"] = deterministic_analysis
                     st.session_state["workout_interpretation"] = workout_interpretation
 
@@ -1026,6 +1425,7 @@ with tab1:
                     RuntimeError,
                     ValueError,
                 ) as exc:
+
                     st.error(
                         "Analyse fehlgeschlagen: "
                         f"{exc}"
@@ -1042,23 +1442,56 @@ with tab1:
                 "### Aktuell erfasstes Training"
             )
 
-            for segment in current_workout.segments:
-                for element in segment.elements:
-                    exercise_name = ( 
-                        element.movement.raw_name
-                        or "Unbekannte Übung" 
-                    )
+            render_current_workout(
+                current_workout
+            )
 
-                exercise_details = ""
+            if st.button(
+                "✏️ Workout bearbeiten",
+                width="stretch",
+                key="open_workout_editor",
+            ):
+                st.session_state["workout_editor_open"] = True
 
-                st.markdown(
-                    f"**🏋️ {exercise_name}**"
+            if st.session_state.get("workout_editor_open"):
+                changes_applied = render_workout_editor(
+                    current_workout
                 )
 
-                if exercise_details:
-                    st.write(
-                        exercise_details
-                    )
+                if changes_applied:
+                    with st.spinner(
+                        "Workout wird nach deinen Änderungen neu analysiert ..."
+                    ):
+                        try:
+                            (
+                                deterministic_analysis,
+                                workout_interpretation,
+                            ) = analyze_workout(
+                                parsed_workout=current_workout,
+                                sportart=sportart,
+                                api_key=MISTRAL_API_KEY,
+                                model=MISTRAL_TEXT_MODEL,
+                            )
+                        except (RuntimeError, ValueError) as exc:
+                            st.error(
+                                "Die geänderte Workout-Version konnte "
+                                f"nicht analysiert werden: {exc}"
+                            )
+                        else:
+                            st.session_state[
+                                "deterministic_analysis"
+                            ] = deterministic_analysis
+                            st.session_state[
+                                "workout_interpretation"
+                            ] = workout_interpretation
+                            st.session_state["save_notice"] = {
+                                "type": "success",
+                                "text": (
+                                    "Workout-Änderungen wurden übernommen "
+                                    "und neu analysiert."
+                                ),
+                            }
+                            st.rerun()
 
             st.markdown("---")
             st.subheader(
@@ -1451,13 +1884,24 @@ with tab2:
                 "workout": current_workout_text,
                 "history_summary": history_summary,
                 "training_analysis": training_analysis,
+                "readiness": readiness,
+                "weekly_focus": weekly_focus,
             }
         )
 
-        if st.session_state.get("letzter_state_key") != coach_state_key:
+        if (
+            st.session_state.get("letzter_state_key")
+            != coach_state_key
+        ):
             with st.spinner(
-                "Coach analysiert aktuelles Training und Trainingshistorie ..."
+                "Coach analysiert aktuelles Training "
+                "und Trainingshistorie ..."
             ):
+
+                # --------------------------------------------
+                # AUSFÜHRLICHE COACH-EINORDNUNG
+                # --------------------------------------------
+
                 try:
                     coach_text = build_coach_feedback(
                         parsed_workout=parsed_workout,
@@ -1477,23 +1921,106 @@ with tab2:
                         api_key=MISTRAL_API_KEY,
                         model=MISTRAL_TEXT_MODEL,
                     )
+
                 except RuntimeError as exc:
-                    print(f"Coach-Feedback fehlgeschlagen: {exc}")
-                    coach_text = (
-                        "Coach-Zusammenfassung\n\n"
-                        "Das Coach-Feedback konnte momentan nicht erstellt werden. "
-                        "Bitte versuche es erneut.\n\n"
-                        "Nächste Einheit\n\n"
-                        f"- **Fokus:** {weekly_focus.get('title', 'kontrollierter Trainingsreiz')}\n"
-                        f"- **Vorschlag:** {weekly_focus.get('session', '20–30 Minuten lockere Bewegung')}"
+                    print(
+                        f"Coach-Feedback fehlgeschlagen: {exc}"
                     )
 
-                st.session_state["letzter_coach_text"] = coach_text
-                st.session_state["letzter_state_key"] = coach_state_key
+                    coach_text = (
+                        "Mit weiteren gespeicherten Einheiten "
+                        "kann ich dein Training und seine "
+                        "Entwicklung zuverlässiger einordnen."
+                    )
+
+                # --------------------------------------------
+                # DAILY COACH TIPS
+                # --------------------------------------------
+
+                try:
+                    daily_coach_tips = build_daily_tips(
+                        readiness=readiness,
+                        weekly_focus=weekly_focus,
+                        training_analysis=training_analysis,
+                        history_summary=history_summary,
+                        sportart=user_sport,
+                        level=user_level,
+                        workout_rpe=user_rpe,
+                        duration_minutes=duration_minutes,
+                        injuries=user_injuries,
+                        api_key=MISTRAL_API_KEY,
+                        model=MISTRAL_TEXT_MODEL,
+                    )
+
+                except RuntimeError as exc:
+                    print(
+                        f"Daily Coach Tips fehlgeschlagen: {exc}"
+                    )
+
+                    daily_coach_tips = {
+                        "training": (
+                            readiness.get("plan_guidance")
+                            or (
+                                "Folge grundsätzlich deinem "
+                                "bestehenden Trainingsplan."
+                            )
+                        ),
+                        "nutrition": (
+                            "Versorge dich passend zu deiner "
+                            "Trainingsbelastung mit ausreichend "
+                            "Flüssigkeit und Energie."
+                        ),
+                        "recovery": (
+                            "Plane normale Erholung passend zu "
+                            "deiner aktuellen Belastbarkeit ein."
+                        ),
+                    }
+
+                # --------------------------------------------
+                # ERGEBNISSE CACHEN
+                # --------------------------------------------
+
+                st.session_state[
+                    "letzter_coach_text"
+                ] = coach_text
+
+                st.session_state[
+                    "letzte_daily_coach_tips"
+                ] = daily_coach_tips
+
+                st.session_state[
+                    "letzter_state_key"
+                ] = coach_state_key
+
+
+        # ----------------------------------------------------
+        # COACH-DATEN AUS SESSION STATE
+        # ----------------------------------------------------
 
         coach_display_text = (
-            st.session_state.get("letzter_coach_text")
-            or "Noch kein Coach-Feedback verfügbar."
+            st.session_state.get(
+                "letzter_coach_text"
+            )
+            or (
+                "Noch kein Coach-Feedback verfügbar."
+            )
+        )
+
+        daily_coach_tips = (
+            st.session_state.get(
+                "letzte_daily_coach_tips"
+            )
+            or {
+                "training": (
+                    "Noch kein Trainingstipp verfügbar."
+                ),
+                "nutrition": (
+                    "Noch kein Ernährungstipp verfügbar."
+                ),
+                "recovery": (
+                    "Noch kein Recovery-Tipp verfügbar."
+                ),
+            }
         )
 
         # ----------------------------------------------------
@@ -1771,6 +2298,7 @@ with tab2:
             positive_observations=positive_observations,
             weekly_focus=weekly_focus,
             coach_text=coach_display_text,
+            daily_coach_tips=daily_coach_tips,
             load_trend=load_trend,
             consistency=consistency,
             diversity=diversity,
@@ -1938,18 +2466,6 @@ with tab3:
                     include_time=False,
                 )
  
-                for i, value in enumerate(history_display["zeitstempel"]):
-                    if isinstance(value, type):
-                        print("TYPE-OBJEKT:", i, value, repr(value))
-
-                for i, value in enumerate(history_display["zeitstempel"]):
-                    if isinstance(value, type):
-                        print("FEHLER:", i, value)
-
-                    if type(value).__name__ == "StringDtype":
-                        print("STRINGDTYPE:", i, value)
-
-
                 st.dataframe(
                     history_display[
                         [
@@ -2880,294 +3396,3 @@ with tab4:
             "**Struktureller Workout-Wert:** "
             f"`{structural_score}`"
         )
-
-       # if classified_workout:
-            # with st.expander(
-            #     "🔍 Erkannte Trainingsklassifikation",
-            #     expanded=False,
-            # ):
-            #     classified_exercises = (
-            #         classified_workout.get(
-            #             "uebungen",
-            #             [],
-            #         )
-            #     )
-
-            #     if not classified_exercises:
-            #         st.caption(
-            #             "Keine klassifizierten Übungen verfügbar."
-            #         )
-
-            #     for exercise in classified_exercises:
-            #         exercise_name = (
-            #             exercise.get("canonical_name")
-            #             or exercise.get("name")
-            #             or "Unbekannte Übung"
-            #         )
-
-            #         st.markdown(
-            #             f"### {exercise_name}"
-            #         )
-
-            #         patterns = [
-            #             item.get("type")
-            #             for item in exercise.get(
-            #                 "movement_patterns",
-            #                 [],
-            #             )
-            #             if item.get("type")
-            #         ]
-
-            #         muscles = [
-            #             item.get("type")
-            #             for item in exercise.get(
-            #                 "muscle_groups",
-            #                 [],
-            #             )
-            #             if item.get("type")
-            #         ]
-
-            #         load_types = [
-            #             item.get("type")
-            #             for item in exercise.get(
-            #                 "load_types",
-            #                 [],
-            #             )
-            #             if item.get("type")
-            #         ]
-
-            #         training_goal = (
-            #             exercise.get(
-            #                 "training_goal",
-            #                 {},
-            #             ).get("type")
-            #         )
-
-            #         st.write(
-            #             "**Bewegungsmuster:**",
-            #             ", ".join(patterns)
-            #             or "Nicht erkannt",
-            #         )
-
-            #         st.write(
-            #             "**Muskelgruppen:**",
-            #             ", ".join(muscles)
-            #             or "Nicht erkannt",
-            #         )
-
-            #         st.write(
-            #             "**Trainingsziel:**",
-            #             training_goal
-            #             or "Nicht sicher bestimmbar",
-            #         )
-
-            #         st.write(
-            #             "**Belastungsarten:**",
-            #             ", ".join(load_types)
-            #             or "Nicht erkannt",
-            #         )
-
-            #         st.write(
-            #             "**Konfidenz:**",
-            #             exercise.get(
-            #                 "overall_confidence",
-            #                 0,
-            #             ),
-            #         )
-
-            #         if exercise.get(
-            #             "review_status"
-            #         ) != "approved":
-            #             st.warning(
-            #                 "Diese Zuordnung sollte "
-            #                 "manuell geprüft werden."
-            #             )
-
-        #if training_dimensions:
-            # with st.expander(
-            #     "📊 Aggregierte Trainingsdaten",
-            #     expanded=False,
-            # ):
-            #     st.write(
-            #         "**Bewegungsmuster-Belastung**"
-            #     )
-
-            #     st.json(
-            #         training_dimensions[
-            #             "movement_pattern_load"
-            #         ]
-            #     )
-
-            #     st.write(
-            #         "**Muskelgruppen-Belastung**"
-            #     )
-
-            #     st.json(
-            #         training_dimensions[
-            #             "muscle_group_load"
-            #         ]
-            #     )
-
-            #     st.write(
-            #         "**Trainingsziele**"
-            #     )
-
-            #     st.json(
-            #         training_dimensions[
-            #             "training_goal_counts"
-            #         ]
-            #     )
-
-            #     st.write(
-            #         "**Belastungsarten**"
-            #     )
-
-            #     st.json(
-            #         training_dimensions[
-            #             "load_type_load"
-            #         ]
-            #     )
-
-            #     st.write(
-            #         "**Trainingsvolumen**"
-            #     )
-
-            #     st.json(
-            #         training_dimensions[
-            #             "volume_totals"
-            #         ]
-            #     )
-
-            #     st.caption(
-            #         "Der Belastungswert ist eine grobe "
-            #         "MVP-Schätzung aus Dauer, RPE und "
-            #         "erkannten Workout-Inhalten. "
-            #         "Er ersetzt keine medizinische oder "
-            #         "sportwissenschaftliche Diagnostik."
-            #     )
-
-        # ----------------------------------------------------
-        # HISTORIENZUSAMMENFASSUNG ANZEIGEN
-        # ----------------------------------------------------
-
-        # with st.expander(
-        #     "📚 Verwendete Trainingshistorie"
-        # ):
-        #     st.write(
-        #         "**Analysierter Zeitraum:** "
-        #         f"{history_summary.get('zeitraum_tage', 90)} Tage"
-        #     )
-
-        #     st.write(
-        #         "**Analysierte frühere Einheiten:** "
-        #         f"{history_summary.get('anzahl_einheiten', 0)}"
-        #     )
-
-        #     st.write(
-        #         "**Einheiten der letzten 7 Tage:** "
-        #         f"{history_summary.get('einheiten_letzte_7_tage', 0)}"
-        #     )
-
-        #     average_rpe = (
-        #         history_summary.get(
-        #             "durchschnittliche_rpe"
-        #         )
-        #     )
-
-        #     if average_rpe is not None:
-        #         st.write(
-        #             "**Durchschnittliche RPE:** "
-        #             f"{average_rpe}"
-        #         )
-
-        #     current_week_load = (
-        #         history_summary.get(
-        #             "belastung_letzte_7_tage"
-        #         )
-        #     )
-
-        #     previous_week_load = (
-        #         history_summary.get(
-        #             "belastung_vorherige_7_tage"
-        #         )
-        #     )
-
-        #     if (
-        #         current_week_load
-        #         is not None
-        #     ):
-        #         st.write(
-        #             "**Belastung letzte 7 Tage:** "
-        #             f"{current_week_load}"
-        #         )
-
-        #     if (
-        #         previous_week_load
-        #         is not None
-        #     ):
-        #         st.write(
-        #             "**Belastung vorherige 7 Tage:** "
-        #             f"{previous_week_load}"
-        #         )
-
-        #     load_change = (
-        #         history_summary.get(
-        #             "belastungsveraenderung_prozent"
-        #         )
-        #     )
-
-        #     if load_change is not None:
-        #         st.write(
-        #             "**Belastungsveränderung "
-        #             "gegenüber der vorherigen Woche:** "
-        #             f"{load_change:+.1f} %"
-        #         )
-
-        #     high_rpe_count = (
-        #         history_summary.get(
-        #             "einheiten_mit_rpe_ab_8",
-        #             0,
-        #         )
-        #     )
-
-        #     st.write(
-        #         "**Einheiten mit RPE ≥ 8:** "
-        #         f"{high_rpe_count}"
-        #     )
-
-        #     st.write(
-        #         "**Erkannte Trainingskategorien:**"
-        #     )
-
-        #     categories = (
-        #         history_summary.get(
-        #             "trainingskategorien",
-        #             {},
-        #         )
-        #     )
-
-        #     if categories:
-        #         st.json(categories)
-        #     else:
-        #         st.caption(
-        #             "Noch keine Trainingskategorien "
-        #             "aus früheren Einheiten erkannt."
-        #         )
-
-        #     complaints = (
-        #         history_summary.get(
-        #             "gemeldete_beschwerden",
-        #             [],
-        #         )
-        #     )
-
-        #     if complaints:
-        #         st.write(
-        #             "**Gemeldete Beschwerden "
-        #             "in der Historie:**"
-        #         )
-
-        #         for complaint in complaints:
-        #             st.markdown(
-        #                 f"- {complaint}"
-        #             )

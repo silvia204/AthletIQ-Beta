@@ -1074,10 +1074,18 @@ register(
             "Chest-to-Bars",
             "Chest-to-Bar Pull-up",
             "Chest-to-Bar Pull-ups",
+            "Chest to Bar",
+            "Chest to Bars",
+            "Chest to Bar Pull-up",
+            "Chest to Bar Pull-ups",
             "Strict Chest-to-Bar",
             "Strict Chest-to-Bars",
             "Butterfly Chest-to-Bar",
             "Butterfly Chest-to-Bars",
+            "C2B Pull-up",
+            "C2B Pull-ups",
+            "C2B Pullup",
+            "C2B Pullups",
         ),
         aliases=(
             "ctb",
@@ -1571,7 +1579,7 @@ register(
             MuscleGroup.HAMSTRINGS,
             MuscleGroup.CALVES,
         ),
-        is_crossfit_movement=False,
+        is_crossfit_movement=True,
         notes="All running variations.",
     )
 )

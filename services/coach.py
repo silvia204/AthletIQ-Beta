@@ -23,6 +23,7 @@ from models.training_analysis import (
 
 from services.mistral_coach import (
     build_coach_with_mistral,
+    build_daily_coach_tips,
 )
 
 
@@ -64,6 +65,40 @@ def build_coach_feedback(
         duration_minutes=duration_minutes,
         injuries=injuries,
         comment=comment,
+        api_key=api_key,
+        model=model,
+    )
+
+
+def build_daily_tips(
+    *,
+    readiness: dict,
+    weekly_focus: dict,
+    training_analysis: TrainingAnalysis,
+    history_summary: dict,
+    sportart: str,
+    level: str,
+    workout_rpe: int | None,
+    duration_minutes: int | None,
+    injuries: str | None,
+    api_key: str,
+    model: str,
+) -> dict[str, str]:
+    """
+    Erstellt die drei kompakten Daily-Coach-Tipps
+    für Training, Ernährung und Recovery.
+    """
+
+    return build_daily_coach_tips(
+        readiness=readiness,
+        weekly_focus=weekly_focus,
+        training_analysis=training_analysis,
+        history_summary=history_summary,
+        sportart=sportart,
+        level=level,
+        workout_rpe=workout_rpe,
+        duration_minutes=duration_minutes,
+        injuries=injuries,
         api_key=api_key,
         model=model,
     )

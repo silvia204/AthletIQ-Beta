@@ -38,15 +38,33 @@ class AthleteProfile:
         ]
 
 
-def expected_movements(level: AthleteLevel) -> List[Movement]:
+def expected_movements(
+    level: AthleteLevel,
+) -> List[Movement]:
+    """
+    Liefert die für das Athlete Level erwarteten     CrossFit-Movements.
+
+    Berücksichtigt werden ausschließlich Movements, die in der zentralen Movement Registry mit
+    is_crossfit_movement=True gekennzeichnet sind.
+    """
+
     current = _LEVEL_ORDER[level]
+
     return sorted(
         [
             movement
             for movement in MOVEMENTS
-            if _LEVEL_ORDER[movement.minimum_level] <= current
+            if (
+                movement.is_crossfit_movement
+                and _LEVEL_ORDER[
+                    movement.minimum_level
+                ] <= current
+            )
         ],
-        key=lambda m: (m.category.value, m.display_name),
+        key=lambda m: (
+            m.category.value,
+            m.display_name,
+        ),
     )
 
 
