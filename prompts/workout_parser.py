@@ -284,6 +284,91 @@ Falls Wiederholungen einer Zeit- oder Distanzvorgabe vorangestellt sind (z. B. 7
 werden diese als "sets" gespeichert. Die Zeit bzw. Distanz wird in "duration" bzw. "distance" eingetragen.
 
 --------------------------------------------------
+ZEILENSTRUKTUR UND GEWICHTSANGABEN
+--------------------------------------------------
+
+Bei typischen Workout-Zeilen steht die Wiederholungszahl häufig am Anfang,
+danach das Movement und anschließend optional die Last.
+
+Typisches Format:
+
+<reps> <movement> [@ <weight>]
+
+Beispiele:
+
+12 DB Thrusters @ 15 kg
+10 Toes-to-Bar
+8 KB Swings @ 24 kg
+6 Front Squats @ 60 kg
+
+Regeln:
+
+- Eine Zahl am Anfang einer Übungszeile ist in der Regel die Wiederholungszahl
+  und wird als "reps" gespeichert.
+- Der Text danach beschreibt das Movement.
+- Eine Angabe nach "@" beschreibt in der Regel die verwendete Last.
+- "@ 15 kg" bedeutet weight = 15 und weight_unit = "kg".
+- Die Reihenfolge Reps -> Movement -> @ Gewicht muss bei der Extraktion
+  berücksichtigt werden.
+
+Bei Dumbbells (DB/Dumbbell) und Kettlebells (KB/Kettlebell) kann die
+Gewichtsangabe zusätzlich die Anzahl der verwendeten Geräte ausdrücken.
+
+Wenn bei einem DB- oder KB-Movement nach "@" eindeutig zwei gleich schwere
+Geräte angegeben sind, z. B. "2x15 kg", "2 x 15 kg" oder "2×15 kg":
+
+- interpretiere die führende 2 als Anzahl der Geräte, NICHT als Multiplikation
+  des Gewichts;
+- normalisiere das Movement zu einer Double-Variante;
+- speichere unter "weight" ausschließlich das Gewicht PRO GERÄT;
+- addiere oder multipliziere die Gewichte niemals.
+
+Beispiele:
+
+12 DB Thrusters @ 2x15 kg
+-> movement = "Double DB Thrusters"
+-> reps = 12
+-> weight = 15
+-> weight_unit = "kg"
+
+10 DB Front Squats @ 2 x 20 kg
+-> movement = "Double DB Front Squats"
+-> reps = 10
+-> weight = 20
+-> weight_unit = "kg"
+
+8 KB Front Rack Lunges @ 2×16 kg
+-> movement = "Double KB Front Rack Lunges"
+-> reps = 8
+-> weight = 16
+-> weight_unit = "kg"
+
+Eine einfache Gewichtsangabe ohne vorangestellte Geräteanzahl darf NICHT
+automatisch als Double interpretiert werden.
+
+Beispiele:
+
+12 DB Snatches @ 22.5 kg
+-> movement = "DB Snatches"
+-> weight = 22.5
+-> weight_unit = "kg"
+
+10 Single DB Thrusters @ 15 kg
+-> movement = "Single DB Thrusters"
+-> weight = 15
+-> weight_unit = "kg"
+
+10 Double DB Thrusters @ 15 kg
+-> movement = "Double DB Thrusters"
+-> weight = 15
+-> weight_unit = "kg"
+
+Die Grundsätze "Verändere keine Zahlen" und "Verändere keine Gewichte"
+bedeuten hierbei: Der numerische Lastwert pro verwendetem Gerät darf nicht
+verändert werden. Eine Schreibweise wie "2x15 kg" wird deshalb als zwei
+Geräte zu je 15 kg strukturiert und NICHT als 30 kg gespeichert.
+
+--------------------------------------------------
 JSON-SCHEMA
 --------------------------------------------------
 

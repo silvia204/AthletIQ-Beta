@@ -434,6 +434,74 @@ def evaluate_dimension(
         key=lambda item: (-item["priority_score"], -item["share"], item["label"]),
     )
 
+def evaluate_crossfit_movements(
+    *,
+    counts_28: Mapping[str, Any],
+    counts_14: Mapping[str, Any],
+    previous_14: Mapping[str, Any],
+    sessions_14: int,
+    previous_sessions_14: int,
+) -> list[dict[str, Any]]:
+    keys = set(counts_28) | set(counts_14) | set(previous_14)
+
+    rows: list[dict[str, Any]] = []
+
+    for key in sorted(keys):
+        value_28 = max(0.0, _safe_float(counts_28.get(key)))
+        value_14 = max(0.0, _safe_float(counts_14.get(key)))
+        previous_value_14 = max(
+            0.0,
+            _safe_float(previous_14.get(key)),
+        )
+
+        share_14 = (
+            value_14 / sessions_14
+            if sessions_14 > 0
+            else 0.0
+        )
+
+        previous_share_14 = (
+            previous_value_14 / previous_sessions_14
+            if previous_sessions_14 > 0
+            else 0.0
+        )
+
+        trend = _trend(
+            share_14,
+            previous_share_14,
+        )
+
+        rows.append({
+            "key": key,
+            "label": _label("crossfit_movements", key),
+            "value_28": round(value_28, 2),
+
+            "value_14": round(value_14, 2),
+            "sessions_14": sessions_14,
+            "share_14": round(share_14, 4),
+            "share_14_percent": round(share_14 * 100, 1),
+
+            "previous_14": round(previous_value_14, 2),
+            "previous_sessions_14": previous_sessions_14,
+            "previous_share_14": round(previous_share_14, 4),
+            "previous_share_14_percent": round(
+                previous_share_14 * 100,
+                1,
+            ),
+
+            "trend_direction": trend["direction"],
+            "trend_symbol": trend["symbol"],
+            "trend_change_percent": trend["change_percent"],
+        })
+
+    return sorted(
+        rows,
+        key=lambda item: (
+            -item["share_14"],
+            -item["value_14"],
+            item["label"],
+        ),
+    )
 
 def build_balance_findings(balance: Mapping[str, Any], max_items: int = 6) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
@@ -472,16 +540,28 @@ def build_training_balance(
     window_14 = windows.get("14_days", {}) or {}
     window_28 = windows.get("28_days", {}) or {}
 
+    dimensions = (
+        "muscle_groups",
+        "movement_patterns",
+        "training_goals",
+        "load_types",
+    )
+
     result: dict[str, Any] = {
         "primary_goal": goal,
         "period_days": 28,
         "trend_days": 14,
     }
 
-    for dimension in ("muscle_groups", "movement_patterns", "training_goals", "load_types"):
+    for dimension in dimensions:
         counts_28 = window_28.get(dimension, {}) or {}
         counts_14 = window_14.get(dimension, {}) or {}
-        previous_14 = _previous_14_counts(window_28, window_14, dimension)
+        previous_14 = _previous_14_counts(
+            window_28,
+            window_14,
+            dimension,
+        )
+
         result[dimension] = evaluate_dimension(
             dimension=dimension,
             counts_28=counts_28,
@@ -489,18 +569,60 @@ def build_training_balance(
             previous_14=previous_14,
             goal=goal,
         )
+        
+        # CrossFit Skills werden als historische Häufigkeit ausgewertet,
+        # nicht als über- oder unterrepräsentierte Trainingsdimension.
+        crossfit_28 = window_28.get(
+            "crossfit_movements",
+            {},
+        ) or {}
+
+        crossfit_14 = window_14.get(
+            "crossfit_movements",
+            {},
+        ) or {}
+
+        crossfit_previous_14 = _previous_14_counts(
+            window_28,
+            window_14,
+            "crossfit_movements",
+        )
+
+        sessions_14 = int(
+            _safe_float(window_14.get("sessions"))
+        )
+
+        sessions_28 = int(
+            _safe_float(window_28.get("sessions"))
+        )
+
+        previous_sessions_14 = max(
+            0,
+            sessions_28 - sessions_14,
+        )
+
+        result["crossfit_movements"] = evaluate_crossfit_movements(
+            counts_28=crossfit_28,
+            counts_14=crossfit_14,
+            previous_14=crossfit_previous_14,
+            sessions_14=sessions_14,
+            previous_sessions_14=previous_sessions_14,
+        )
+
 
     result["findings"] = build_balance_findings(result)
+
     result["overview"] = {
         "underrepresented": sum(
             item["status"] == "underrepresented"
-            for dimension in ("muscle_groups", "movement_patterns", "training_goals", "load_types")
+            for dimension in dimensions
             for item in result[dimension]
         ),
         "overrepresented": sum(
             item["status"] == "overrepresented"
-            for dimension in ("muscle_groups", "movement_patterns", "training_goals", "load_types")
+            for dimension in dimensions
             for item in result[dimension]
         ),
     }
+
     return result

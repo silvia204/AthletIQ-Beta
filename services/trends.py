@@ -42,6 +42,7 @@ DIMENSION_COLUMNS = {
     "movement_patterns": "bewegungsmuster_json",
     "muscle_groups": "muskelgruppen_json",
     "load_types": "belastungsarten_json",
+    "crossfit_movements": "crossfit_movements_json",
 }
 
 
@@ -306,6 +307,48 @@ def aggregate_dimension(
 
     return {
         key: round(value, 2)
+        for key, value in totals.items()
+    }
+
+def aggregate_workout_presence(
+    history: pd.DataFrame,
+    *,
+    column_name: str,
+) -> dict[str, float]:
+    """
+    Zählt, in wie vielen Workouts ein Eintrag vorkommt.
+
+    Ein Eintrag wird innerhalb eines Workouts maximal einmal gezählt,
+    unabhängig von seinem gespeicherten Wert.
+    """
+    totals: Counter[str] = Counter()
+
+    if history.empty or column_name not in history.columns:
+        return {}
+
+    for raw_value in history[column_name]:
+        parsed = json_loads_from_sheet(
+            raw_value,
+            default={},
+        )
+
+        if not isinstance(parsed, dict):
+            continue
+
+        movements_in_workout: set[str] = set()
+
+        for raw_key, raw_amount in parsed.items():
+            key = normalize_key(raw_key)
+            amount = safe_float(raw_amount)
+
+            if key and amount > 0:
+                movements_in_workout.add(key)
+
+        for key in movements_in_workout:
+            totals[key] += 1
+
+    return {
+        key: float(value)
         for key, value in totals.items()
     }
 
@@ -892,8 +935,15 @@ def build_window(
                 ]
             ),
         ),
+        "crossfit_movements": aggregate_dimension(
+            period,
+            column_name=(
+                DIMENSION_COLUMNS[
+                    "crossfit_movements"
+                ]
+            ),
+        ),
     }
-
 
 def empty_trend_result(
     *,

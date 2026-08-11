@@ -555,6 +555,63 @@ def render_balance_dimension(
     )
 
 
+def render_crossfit_movements(
+    items: list[dict[str, Any]],
+    *,
+    max_rows: int = 15,
+) -> None:
+    """Rendert CrossFit-Skills als relativen 14-Tage-Historienvergleich."""
+
+    st.markdown("##### CrossFit Skills")
+
+    if not items:
+        st.info("In diesem Zeitraum wurden keine CrossFit Skills erkannt.")
+        return
+
+    visible_items = items[:max_rows]
+
+    table = pd.DataFrame(
+        [
+            {
+                "CrossFit Skill": item.get("label", "–"),
+
+                "Letzte 14 T.": (
+                    f"{int(float(item.get('value_14', 0)))} / "
+                    f"{int(item.get('sessions_14', 0))} · "
+                    f"{float(item.get('share_14_percent', 0)):.1f} %"
+                ),
+
+                "Vorherige 14 T.": (
+                    f"{int(float(item.get('previous_14', 0)))} / "
+                    f"{int(item.get('previous_sessions_14', 0))} · "
+                    f"{float(item.get('previous_share_14_percent', 0)):.1f} %"
+                ),
+
+                "Trend": (
+                    f"{item.get('trend_symbol', '→')} "
+                    + (
+                        f"{float(item['trend_change_percent']):+.1f} %"
+                        if item.get("trend_change_percent") is not None
+                        else "neu / keine Basis"
+                    )
+                ),
+            }
+            for item in visible_items
+        ]
+    )
+
+    st.dataframe(
+        table,
+        hide_index=True,
+        width="stretch",
+    )
+
+    st.caption(
+        "Anteil der Workouts, in denen der jeweilige CrossFit Skill "
+        "vorkam · letzte 14 Tage im Vergleich zu den vorherigen 14 Tagen."
+    )
+
+
 def format_workout_element_details(
     element: Any,
 ) -> str:
@@ -2304,17 +2361,7 @@ with tab2:
             diversity=diversity,
         )
 
-        # ----------------------------------------------------
-        # CROSSFIT DASHBOARD
-        # ----------------------------------------------------
 
-        if str(user_sport).casefold() == "crossfit":
-
-            st.divider()
-
-            render_crossfit_dashboard(
-                history_summary=history_summary,
-            )
 
 
 # ============================================================
@@ -2828,48 +2875,48 @@ with tab4:
                 unsafe_allow_html=True,
             )
 
-            st.markdown("#### Was gut läuft")
+        st.markdown("#### Was gut läuft")
 
-            if positive_observations:
-                positive_columns = st.columns(
-                    len(positive_observations)
-                )
+        if positive_observations:
+            positive_columns = st.columns(
+                len(positive_observations)
+            )
 
-                for column, observation in zip(
-                    positive_columns,
-                    positive_observations,
-                ):
-                    with column:
-                        observation_title = str(
-                            observation.get(
-                                "title",
-                                "Positive Entwicklung",
-                            )
+            for column, observation in zip(
+                positive_columns,
+                positive_observations,
+            ):
+                with column:
+                    observation_title = str(
+                        observation.get(
+                            "title",
+                            "Positive Entwicklung",
                         )
+                    )
 
-                        observation_message = str(
-                            observation.get(
-                                "message",
-                                "",
-                            )
+                    observation_message = str(
+                        observation.get(
+                            "message",
+                            "",
                         )
+                    )
 
-                        st.markdown(
-                            f"""
-                            <div class="positive-card">
-                                <strong>✓ {html.escape(observation_title)}</strong>
-                                <div>
-                                    {html.escape(observation_message)}
-                                </div>
+                    st.markdown(
+                        f"""
+                        <div class="positive-card">
+                            <strong>✓ {html.escape(observation_title)}</strong>
+                            <div>
+                                {html.escape(observation_message)}
                             </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-            else:
-                st.caption(
-                    "Für eine positive Trendbewertung sind "
-                    "noch weitere Trainingsdaten erforderlich."
-                )
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+        else:
+            st.caption(
+                "Für eine positive Trendbewertung sind "
+                "noch weitere Trainingsdaten erforderlich."
+            )
 
         dashboard_col1, dashboard_col2, dashboard_col3, dashboard_col4 = (
             st.columns(4)
@@ -2916,12 +2963,13 @@ with tab4:
             "im aktuellen Trainingsmix."
         )
 
-        balance_tab1, balance_tab2, balance_tab3, balance_tab4 = st.tabs(
+        balance_tab1, balance_tab2, balance_tab3, balance_tab4, balance_tab5 = st.tabs(
             [
                 "Bewegungsmuster",
                 "Trainingsarten",
                 "Muskelgruppen",
                 "Belastungsarten",
+                "CrossFit Skills"
             ]
         )
 
@@ -2951,6 +2999,12 @@ with tab4:
                 "Belastungsarten",
                 training_balance.get("load_types", []),
                 max_rows=10,
+            )
+
+        with balance_tab5:
+            render_crossfit_movements(
+                training_balance.get("crossfit_movements", []),
+                max_rows=15,
             )
 
         st.markdown("#### Priorisierte Balance-Hinweise")
@@ -3396,3 +3450,15 @@ with tab4:
             "**Struktureller Workout-Wert:** "
             f"`{structural_score}`"
         )
+
+        # ----------------------------------------------------
+        # CROSSFIT DASHBOARD
+        # ----------------------------------------------------
+
+        if str(user_sport).casefold() == "crossfit":
+
+            st.divider()
+
+            render_crossfit_dashboard(
+                history_summary=history_summary,
+            )

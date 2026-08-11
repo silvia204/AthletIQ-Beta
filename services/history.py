@@ -19,6 +19,7 @@ DIMENSION_COLUMNS = {
     "training_goal_counts": "trainingsziele_json",
     "load_type_load": "belastungsarten_json",
     "volume_totals": "trainingsvolumen_json",
+    "crossfit_movements": "crossfit_movements_json",
 }
 
 
@@ -375,6 +376,7 @@ def aggregate_training_dimensions(
         "training_goal_counts": {},
         "load_type_load": {},
         "volume_totals": {},
+        "crossfit_movements": {},
     }
 
     if history.empty:
