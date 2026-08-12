@@ -315,6 +315,13 @@ Elemente innerhalb des Metric-Wertes angesprochen.
 """
 
 
+STATUS_DASHBOARD_CSS = r"""
+<style>
+.status-hero{padding:.3rem .1rem 1rem}.status-eyebrow{font-size:.78rem;font-weight:800;letter-spacing:.12em;color:#8b5cf6}.status-greeting{font-size:1.65rem;font-weight:760;margin-top:.25rem}.status-card{border:1px solid var(--border-color);border-radius:20px;background:var(--surface-1);padding:1.15rem 1.25rem;margin:.65rem 0 1rem;box-shadow:0 10px 30px rgba(0,0,0,.04)}.status-week-card{background:linear-gradient(135deg,var(--surface-1),var(--surface-3))}.status-card-heading,.status-section-title{font-size:.78rem;font-weight:800;letter-spacing:.06em}.status-section-title{margin:1.3rem 0 .45rem}.status-pill,.priority-pill{display:inline-block;border-radius:999px;padding:.28rem .65rem;font-size:.78rem;font-weight:700;margin:.65rem 0}.status-good{background:rgba(34,197,94,.14);color:#22c55e}.status-caution{background:rgba(245,158,11,.14);color:#f59e0b}.status-warn{background:rgba(239,68,68,.14);color:#ef4444}.status-metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-top:.35rem}.status-metric-grid>div{padding:.8rem;border:1px solid var(--border-color);border-radius:14px}.status-metric-grid strong{display:block;font-size:1.05rem}.status-metric-grid span{display:block;color:var(--text-secondary);font-size:.76rem;margin-top:.2rem}.status-finding{display:flex;gap:.65rem;align-items:flex-start;padding:.4rem 0}.finding-ok,.finding-note{display:inline-flex;align-items:center;justify-content:center;min-width:1.3rem;height:1.3rem;border-radius:50%;font-weight:800}.finding-ok{background:rgba(34,197,94,.16);color:#22c55e}.finding-note{background:rgba(245,158,11,.16);color:#f59e0b}.status-supplement-card{border-color:rgba(139,92,246,.65);background:linear-gradient(135deg,rgba(139,92,246,.08),var(--surface-1))}.supplement-row{display:flex;gap:1rem;justify-content:space-between;align-items:flex-start;margin-top:.6rem}.supplement-title,.latest-title{font-size:1.15rem;font-weight:750}.supplement-reason{color:var(--text-secondary);margin-top:.25rem;line-height:1.45}.priority-pill{background:rgba(139,92,246,.16);color:#8b5cf6;white-space:nowrap;margin:0}.status-latest-card{display:flex;align-items:center;justify-content:space-between}.latest-arrow{font-size:2rem;color:#8b5cf6}@media(max-width:700px){.status-metric-grid{grid-template-columns:repeat(2,1fr)}.supplement-row{flex-direction:column}.priority-pill{margin-top:.2rem}}
+</style>
+"""
+
 def apply_theme() -> None:
     """Bindet das zentrale Design-System in die Streamlit-App ein."""
-    st.markdown(THEME_CSS, unsafe_allow_html=True)
+    st.markdown(THEME_CSS + STATUS_DASHBOARD_CSS, unsafe_allow_html=True)
+# NOTE: additional CSS is injected separately below to keep the existing theme stable.

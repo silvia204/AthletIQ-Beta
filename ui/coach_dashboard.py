@@ -68,10 +68,9 @@ def render_coach_dashboard(
         unsafe_allow_html=True,
     )
 
-    st.markdown("### Mein Trainings-Co-Pilot")
+    st.markdown("### Analyse · Ergänzen · Entwicklung")
     st.caption(
-        "Einordnung deines tatsächlich absolvierten Trainings – "
-        "als Ergänzung zu deinem bestehenden Plan oder Gym-Programming."
+        "Dein Coach bewertet dein absolviertes Training, erkennt Muster und zeigt sinnvolle Ergänzungen – ohne dir einen Trainingsplan vorzugeben."
     )
 
     # ----------------------------------------------------
@@ -105,12 +104,29 @@ def render_coach_dashboard(
         unsafe_allow_html=True,
     )
 
+    st.markdown("#### Das läuft gut")
+    if positive_observations:
+        cols = st.columns(min(3, len(positive_observations)), gap="medium")
+        for index, observation in enumerate(positive_observations[:6]):
+            if isinstance(observation, dict):
+                title = observation.get("title", "Positive Entwicklung")
+                message = observation.get("message", observation.get("text", ""))
+            else:
+                title, message = "Positive Entwicklung", str(observation)
+            with cols[index % len(cols)]:
+                st.markdown(
+                    f'<div class="positive-card"><strong>✓ {_safe(title)}</strong><div>{_safe(message)}</div></div>',
+                    unsafe_allow_html=True,
+                )
+    else:
+        st.caption("Noch nicht genügend Daten für belastbare positive Trends.")
+
     # ----------------------------------------------------
-    # ENTSCHEIDUNG FÜR DAS NÄCHSTE TRAINING
+    # SINNVOLLE ERGÄNZUNG
     # ----------------------------------------------------
 
     st.markdown(
-        "#### Entscheidung für dein nächstes geplantes Training"
+        "#### Sinnvoll ergänzen"
     )
 
     guidance_left, guidance_right = st.columns(
@@ -130,10 +146,10 @@ def render_coach_dashboard(
         plan_content = (
             '<div class="focus-card plan-card">'
             '<div class="muted-label">'
-            'DEIN BESTEHENDER PLAN'
+            'EINORDNUNG ZUM PLAN'
             '</div>'
             '<div class="readiness-title">'
-            'Plan wie vorgesehen durchführen'
+            'Bestehenden Plan beibehalten'
             '</div>'
             '<div class="card-detail">'
             f'{_safe(plan_guidance)}'
@@ -189,10 +205,10 @@ def render_coach_dashboard(
         )
 
     # ----------------------------------------------------
-    # TÄGLICHE COACH-TIPPS
+    # ERGÄNZUNGEN UND RECOVERY
     # ----------------------------------------------------
 
-    st.markdown("#### Deine Tipps für heute")
+    st.markdown("#### Ergänzende Hinweise")
 
     training_tip = _safe(
         daily_coach_tips.get("training"),
@@ -222,7 +238,7 @@ def render_coach_dashboard(
                 '<div class="daily-tip-card">'
                 '<div class="muted-label">TRAINING</div>'
                 '<div class="daily-tip-title">'
-                'Accessories'
+                'Gezielter Zusatzreiz'
                 '</div>'
                 '<div class="daily-tip-text">'
                 f'{training_tip}'
@@ -265,7 +281,8 @@ def render_coach_dashboard(
         )
 
 
-    st.markdown("#### Entwicklung auf einen Blick")
+    st.markdown("### Deine Entwicklung")
+    st.caption("28-Tage-Bild und aktuelle Veränderung deiner Belastung, Routine und Trainingsvielfalt.")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Training · 28 Tage", f"{int(sessions_28 or 0)} Einheiten")
     c2.metric(

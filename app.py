@@ -25,6 +25,7 @@ from services.date_utils import (
     sort_training_history,
 )
 from ui.coach_dashboard import render_coach_dashboard
+from ui.status_dashboard import render_status_dashboard
 from ui.crossfit_dashboard import render_crossfit_dashboard
 
 from services.history import (
@@ -197,10 +198,15 @@ DEFAULT_SESSION_STATE = {
     "parsed_workout": None,
     "deterministic_analysis": None,
     "workout_interpretation": None,
+    "coach_context_key": None,
+    "coach_context_source": None,
     "original_parsed_workout": None,
     "workout_editor_open": False,
     "pending_save": False,
     "save_notice": None,
+    "profiles_cache": None,
+    "history_cache": None,
+    "history_cache_athlete": None,
 }
 
 for key, default_value in DEFAULT_SESSION_STATE.items():
@@ -1195,471 +1201,591 @@ def summarize_balance_dimension(
     return sentence[0].upper() + sentence[1:] + "."
 
 
+def _filter_cached_history(history: pd.DataFrame, athlete_name: str, days: int | None = None) -> pd.DataFrame:
+    """Filtert den einmal geladenen Sheet-Stand lokal, ohne weiteren API-Read."""
+    if history is None or history.empty or not athlete_name.strip():
+        return pd.DataFrame(columns=SHEET_COLUMNS)
+    normalized_names = history["name"].fillna("").astype(str).str.strip().str.casefold()
+    result = history[normalized_names == athlete_name.strip().casefold()].copy()
+    if result.empty:
+        return pd.DataFrame(columns=SHEET_COLUMNS)
+    result["zeitstempel_parsed"] = pd.to_datetime(result["zeitstempel"], errors="coerce", utc=True)
+    if days is not None:
+        cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days)
+        result = result[result["zeitstempel_parsed"].notna() & (result["zeitstempel_parsed"] >= cutoff)].copy()
+    result["rpe_numeric"] = pd.to_numeric(result["rpe"], errors="coerce")
+    result["score_numeric"] = pd.to_numeric(result["score"], errors="coerce")
+    result["dauer_numeric"] = pd.to_numeric(result["dauer_minuten"], errors="coerce")
+    return result.sort_values("zeitstempel_parsed", ascending=True)
+
+
 # ============================================================
-# TABS
+# GLOBALER ATHLETENKONTEXT
 # ============================================================
 
-# Die Variablen werden bewusst in dieser Reihenfolge zugeordnet:
-# Trainingsdetails erscheinen als dritter Tab, Historie ganz rechts.
-tab1, tab2, tab4, tab3 = st.tabs(
-    [
-        "🏋️ Training eintragen",
-        "🧠 Mein Coach",
-        "🔎 Trainingsdetails",
-        "📅 Historie",
-    ]
-)
-
-
-# ============================================================
-# TAB 1: WORKOUT EINTRAGEN
-# ============================================================
-
-with tab1:
-    st.subheader(
-        "Neues Workout erfassen"
-    )
-
+header_name_col, header_action_col = st.columns([5, 1])
+with header_name_col:
     user_name = st.text_input(
-        "Benutzername",
-        value=st.session_state[
-            "athleten_name"
-        ],
-        placeholder="Dein Benutzername",
-        help=(
-            "Ziel und Level werden automatisch "
-            "aus dem Tabellenblatt „users“ geladen."
-        ),
+        "Athletenprofil",
+        value=st.session_state["athleten_name"],
+        placeholder="Athletenname eingeben",
+        label_visibility="collapsed",
+        help="Ziel und Level werden automatisch aus dem Tabellenblatt „users“ geladen.",
     ).strip()
 
-    st.session_state[
-        "athleten_name"
-    ] = user_name
-
-    user_profile = None
-    profile_error = None
-
-    if user_name:
-        if conn is None:
-            profile_error = (
-                "Das Athletenprofil kann nicht geladen "
-                "werden, weil Google Sheets nicht "
-                "verbunden ist."
-            )
-        else:
-            try:
-                user_profiles = read_user_profiles(
-                    conn=conn,
-                    spreadsheet_url=SHEET_URL,
-                    worksheet_name=(
-                        USERS_WORKSHEET_NAME
-                    ),
-                )
-
-                user_profile = get_user_profile(
-                    user_profiles,
-                    user_name,
-                )
-
-            except Exception as exc:
-                profile_error = str(exc)
-
-    if user_profile is not None:
-        user_name = user_profile[
-            "username"
-        ]
-        sportart = user_profile[
-            "goal"
-        ]
-        level = user_profile[
-            "level"
-        ]
-
-        st.session_state[
-            "athleten_name"
-        ] = user_name
-        st.session_state[
-            "sportart"
-        ] = sportart
-        st.session_state[
-            "athleten_level"
-        ] = level
-        st.session_state[
-            "user_profile_loaded"
-        ] = True
-
-        profile_col1, profile_col2 = (
-            st.columns(2)
-        )
-
-        profile_col1.metric(
-            "Primäres Ziel",
-            sportart,
-        )
-        profile_col2.metric(
-            "Trainingslevel",
-            level,
-        )
-
+st.session_state["athleten_name"] = user_name
+profile_error = None
+user_profile = None
+if user_name:
+    if conn is None:
+        profile_error = "Das Athletenprofil kann nicht geladen werden, weil Google Sheets nicht verbunden ist."
     else:
-        sportart = ""
-        level = ""
+        try:
+            if st.session_state.get("profiles_cache") is None:
+                st.session_state["profiles_cache"] = read_user_profiles(
+                    conn=conn, spreadsheet_url=SHEET_URL, worksheet_name=USERS_WORKSHEET_NAME
+                )
+            user_profiles = st.session_state["profiles_cache"]
+            user_profile = get_user_profile(user_profiles, user_name)
+        except Exception as exc:
+            profile_error = str(exc)
 
-        st.session_state[
-            "sportart"
-        ] = ""
-        st.session_state[
-            "athleten_level"
-        ] = ""
-        st.session_state[
-            "user_profile_loaded"
-        ] = False
+if user_profile is not None:
+    user_name = user_profile["username"]
+    sportart = user_profile["goal"]
+    level = user_profile["level"]
+    st.session_state["athleten_name"] = user_name
+    st.session_state["sportart"] = sportart
+    st.session_state["athleten_level"] = level
+    st.session_state["user_profile_loaded"] = True
 
-        if profile_error:
-            st.error(profile_error)
-        elif user_name:
-            st.warning(
-                "Dieser Benutzername wurde im "
-                "Tabellenblatt „users“ nicht gefunden."
+    # Google Sheets nur einmal pro Athlet/Sitzung lesen. Alle Views arbeiten
+    # anschließend mit demselben lokalen DataFrame.
+    history_cache_key = user_name.strip().casefold()
+    if st.session_state.get("history_cache_athlete") != history_cache_key:
+        try:
+            st.session_state["history_cache"] = read_workout_history(
+                conn=conn, spreadsheet_url=SHEET_URL, worksheet_name=WORKSHEET_NAME, columns=SHEET_COLUMNS
             )
+            st.session_state["history_cache_athlete"] = history_cache_key
+        except Exception as exc:
+            st.session_state["history_cache"] = pd.DataFrame(columns=SHEET_COLUMNS)
+            profile_error = f"Die Trainingshistorie konnte nicht geladen werden: {exc}"
 
-    injuries = st.text_area(
-        "Aktuelle Einschränkungen oder Verletzungen",
-        value=st.session_state[
-            "verletzungen"
-        ],
-        placeholder=(
-            "z. B. leichtes Ziehen im unteren Rücken, "
-            "Knieschmerzen links bei Squats oder "
-            "müde Schultern"
-        ),
-        help=(
-            "Diese Angaben werden bei der "
-            "Trainings- und Historienanalyse berücksichtigt."
-        ),
-    )
+    with header_name_col:
+        st.caption(f"{sportart} · {level}")
+else:
+    sportart = ""
+    level = ""
+    st.session_state["sportart"] = ""
+    st.session_state["athleten_level"] = ""
+    st.session_state["user_profile_loaded"] = False
+    if profile_error:
+        st.error(profile_error)
+    elif user_name:
+        st.warning("Dieser Benutzername wurde im Tabellenblatt „users“ nicht gefunden.")
 
-    st.session_state[
-        "verletzungen"
-    ] = injuries.strip()
 
-    st.markdown("---")
+if user_profile is not None:
+    first_name = user_name.split()[0] if user_name else "Athlet"
+    st.markdown(f"### Guten Morgen, {first_name} 👋")
 
+with header_action_col:
+    if st.button(
+        "＋",
+        key="global_new_workout",
+        type="primary",
+        width="stretch",
+        disabled=user_profile is None,
+        help="Neues Training eintragen",
+    ):
+        st.session_state["workout_entry_requested"] = True
+        st.rerun()
+
+# ============================================================
+# HAUPTNAVIGATION
+# ============================================================
+
+main_coach, main_training = st.tabs(["🧠 Mein Coach", "🏋️ Training"])
+with main_coach:
+    tab0, tab4, tab2 = st.tabs(["Übersicht", "Analyse", "Einordnung"])
+tab3 = main_training
+
+# ============================================================
+# MEIN COACH · ÜBERSICHT
+# ============================================================
+
+with tab0:
     if not user_name:
-        st.info(
-            "Bitte gib zuerst deinen "
-            "Benutzernamen ein."
-        )
-
+        st.info("Gib oben deinen Benutzernamen ein. Danach werden Status, Coach und Historie für dein Profil geladen.")
     elif user_profile is None:
-        st.info(
-            "Für die Workout-Eingabe muss ein "
-            "gültiges Athletenprofil geladen sein."
-        )
-
+        st.info("Für die App muss ein gültiges Athletenprofil geladen sein.")
     else:
-        input_type = st.radio(
-            "Wie möchtest du das Workout eintragen?",
-            [
-                "Foto hochladen / machen",
-                "Als Text eintippen",
-            ],
-            horizontal=True,
-        )
-
-        should_analyze = False
-        workout_text_input = ""
-        photo = None
-        model_to_use = (
-            MISTRAL_TEXT_MODEL
-        )
-
-        content_payload = ""
-        if (
-            input_type
-            == "Foto hochladen / machen"
-        ):
-            photo = st.camera_input(
-                "Fotografiere das Whiteboard, "
-                "einen Zettel oder dein Display"
+        # Statusdaten immer direkt aus der gespeicherten Historie laden.
+        # Dadurch sind „Letzte Einheit“ und „Deine Entwicklung“ bereits
+        # beim Öffnen der App sinnvoll befüllt und nicht von einer Analyse
+        # in der aktuellen Sitzung abhängig.
+        try:
+            status_history = _filter_cached_history(
+                st.session_state.get("history_cache"), user_name, days=28
             )
+        except Exception as exc:
+            status_history = pd.DataFrame(columns=SHEET_COLUMNS)
+            st.warning(f"Die Trainingshistorie konnte nicht geladen werden: {exc}")
 
-            should_analyze = st.button(
-                "📷 Foto analysieren",
-                disabled=photo is None,
-                type="primary",
-                width="stretch",
-            )
+        # Coach-Kontext automatisch aus der letzten gespeicherten Einheit laden.
+        # Der Schlüssel ändert sich bei Athletenwechsel und sobald ein neues
+        # Workout gespeichert wurde. Dadurch aktualisiert sich „Mein Coach“
+        # automatisch, ohne dass zuerst ein Workout im aktuellen Lauf
+        # analysiert werden muss.
+        if not status_history.empty:
+            latest_for_coach = sort_training_history(status_history).iloc[0]
+            latest_stamp = str(latest_for_coach.get("zeitstempel", ""))
+            latest_workout_text = str(latest_for_coach.get("workout", "") or "").strip()
+            coach_context_key = create_stable_hash({
+                "athlete": user_name.casefold(),
+                "timestamp": latest_stamp,
+                "workout": latest_workout_text,
+            })
 
             if (
-                should_analyze
-                and photo is not None
-            ):
-                mime_type = (
-                    getattr(
-                        photo,
-                        "type",
-                        None,
-                    )
-                    or "image/jpeg"
-                )
-
-
-        else:
-            workout_text_input = (
-                st.text_area(
-                    "Workout hier eintragen",
-                    placeholder=(
-                        "Beispiel:\n"
-                        "Strength: Deadlift 4 × 3\n\n"
-                        "Workout: 5 RFT\n"
-                        "300 m Row\n"
-                        "6 Burpees\n"
-                        "12 Deadlifts"
-                    ),
-                    height=220,
-                )
-            )
-
-            should_analyze = st.button(
-                "🧠 Workout analysieren",
-                disabled=not (
-                    workout_text_input.strip()
-                ),
-                type="primary",
-                width="stretch",
-            )
-
-
-        if should_analyze:
-            with st.spinner(
-                "Workout wird strukturiert "
-                "und geprüft ..."
+                latest_workout_text
+                and st.session_state.get("coach_context_key") != coach_context_key
             ):
                 try:
-                    if (
-                        input_type
-                        == "Foto hochladen / machen"
-                    ):
-                        parsed_workout = parse_workout(
-                            image_data=photo.getvalue(),
-                            image_mime_type=(
-                                getattr(photo, "type", None)
-                                or "image/jpeg"
-                            ),
-                            api_key=MISTRAL_API_KEY,
-                            model=MISTRAL_VISION_MODEL,
-                        )
-                    else:
-                        parsed_workout = parse_workout(
-                            workout_text=workout_text_input.strip(),
-                            api_key=MISTRAL_API_KEY,
-                            model=MISTRAL_TEXT_MODEL,
-                        )
-
-                    deterministic_analysis, workout_interpretation = analyze_workout(
-                        parsed_workout=parsed_workout,
+                    latest_parsed = parse_workout(
+                        workout_text=latest_workout_text,
+                        api_key=MISTRAL_API_KEY,
+                        model=MISTRAL_TEXT_MODEL,
+                    )
+                    latest_analysis, latest_interpretation = analyze_workout(
+                        parsed_workout=latest_parsed,
                         sportart=sportart,
                         api_key=MISTRAL_API_KEY,
                         model=MISTRAL_TEXT_MODEL,
                     )
-
-                    st.session_state["parsed_workout"] = parsed_workout
-                    st.session_state["original_parsed_workout"] = deepcopy(
-                        parsed_workout
+                    st.session_state["parsed_workout"] = latest_parsed
+                    st.session_state["deterministic_analysis"] = latest_analysis
+                    st.session_state["workout_interpretation"] = latest_interpretation
+                    st.session_state["aktuelles_rpe"] = safely_convert_to_int(
+                        latest_for_coach.get("rpe"), default=7
                     )
-                    st.session_state["workout_editor_open"] = False
-                    st.session_state["deterministic_analysis"] = deterministic_analysis
-                    st.session_state["workout_interpretation"] = workout_interpretation
-
-                    st.session_state["letzter_coach_text"] = None
-                    st.session_state["letzter_state_key"] = None
-                    st.session_state["letzter_save_key"] = None
-
-                    st.success("Workout erfolgreich analysiert.")
-
-                except (
-                    RuntimeError,
-                    ValueError,
-                ) as exc:
-
-                    st.error(
-                        "Analyse fehlgeschlagen: "
-                        f"{exc}"
+                    st.session_state["trainingsdauer"] = safely_convert_to_int(
+                        latest_for_coach.get("dauer_minuten"), default=60
                     )
+                    st.session_state["verletzungen"] = str(
+                        latest_for_coach.get("verletzungen", "") or ""
+                    )
+                    st.session_state["workout_kommentar"] = str(
+                        latest_for_coach.get("kommentar", "") or ""
+                    )
+                    st.session_state["coach_context_key"] = coach_context_key
+                    st.session_state["coach_context_source"] = "history"
+                except Exception as exc:
+                    st.warning(
+                        "Die letzte Einheit wurde geladen, konnte aber nicht "
+                        f"für den Coach aufbereitet werden: {exc}"
+                    )
+        else:
+            st.session_state["coach_context_key"] = create_stable_hash({
+                "athlete": user_name.casefold(), "empty": True
+            })
+            st.session_state["coach_context_source"] = "history_empty"
 
+        history_summary = build_history_summary(status_history, period_days=28)
+        trend_analysis = build_trends(status_history)
 
-        current_workout = st.session_state.get(
-            "parsed_workout"
+        cached_analysis = st.session_state.get("letzte_trainingsanalyse")
+        cached_readiness = getattr(cached_analysis, "readiness", {}) if cached_analysis else {}
+        cached_positive = getattr(cached_analysis, "positive_observations", []) if cached_analysis else []
+        cached_focus = getattr(cached_analysis, "weekly_focus", {}) if cached_analysis else {}
+
+        recent_sessions = history_summary.get("letzte_einheiten", []) or []
+        latest_session = recent_sessions[-1] if recent_sessions else {}
+        latest_name = str(latest_session.get("sportart") or "Letzte erfasste Einheit").strip()
+        latest_workout_text = str(latest_session.get("workout") or "").strip()
+        if latest_workout_text:
+            first_line = latest_workout_text.splitlines()[0].strip()
+            if first_line and len(first_line) <= 80:
+                latest_name = first_line
+
+        latest_meta_parts = []
+        if latest_session.get("zeitstempel"):
+            latest_meta_parts.append(str(latest_session["zeitstempel"]))
+        if latest_session.get("dauer_minuten"):
+            latest_meta_parts.append(f"{latest_session['dauer_minuten']} min")
+        if latest_session.get("rpe"):
+            latest_meta_parts.append(f"RPE {latest_session['rpe']}")
+        latest_meta = " · ".join(latest_meta_parts) if latest_meta_parts else "Noch keine gespeicherte Einheit vorhanden"
+
+        if not st.session_state.get("workout_entry_requested", False):
+            render_status_dashboard(
+                    user_name=user_name,
+                sessions_28=int(history_summary.get("anzahl_einheiten", 0) or 0),
+                readiness=cached_readiness,
+                positive_observations=cached_positive,
+                weekly_focus=cached_focus,
+                load_trend=trend_analysis.get("load", {}),
+                consistency=trend_analysis.get("consistency", {}),
+                diversity=trend_analysis.get("diversity", {}),
+                latest_workout_name=latest_name,
+                latest_workout_meta=latest_meta,
+                trend_analysis=trend_analysis,
+                recent_sessions=recent_sessions,
+            )
+# ============================================================
+# TAB 1: WORKOUT EINTRAGEN
+# ============================================================
+
+with tab0:
+    if st.session_state.get("workout_entry_requested", False) and user_profile is not None:
+        st.markdown("---")
+        top_left, top_right = st.columns([4, 1])
+        with top_left:
+            st.subheader("Neues Workout erfassen")
+        with top_right:
+            if st.button("← Zurück", key="close_workout_entry", width="stretch"):
+                st.session_state["workout_entry_requested"] = False
+                st.rerun()
+
+        injuries = st.text_area(
+            "Aktuelle Einschränkungen oder Verletzungen",
+            value=st.session_state[
+                "verletzungen"
+            ],
+            placeholder=(
+                "z. B. leichtes Ziehen im unteren Rücken, "
+                "Knieschmerzen links bei Squats oder "
+                "müde Schultern"
+            ),
+            help=(
+                "Diese Angaben werden bei der "
+                "Trainings- und Historienanalyse berücksichtigt."
+            ),
         )
 
-        if current_workout:
-            st.markdown("---")
-            st.write(
-                "### Aktuell erfasstes Training"
+        st.session_state[
+            "verletzungen"
+        ] = injuries.strip()
+
+        st.markdown("---")
+
+        if not user_name:
+            st.info(
+                "Bitte gib zuerst deinen "
+                "Benutzernamen ein."
             )
 
-            render_current_workout(
-                current_workout
+        elif user_profile is None:
+            st.info(
+                "Für die Workout-Eingabe muss ein "
+                "gültiges Athletenprofil geladen sein."
             )
 
-            if st.button(
-                "✏️ Workout bearbeiten",
-                width="stretch",
-                key="open_workout_editor",
+        else:
+            input_type = st.radio(
+                "Wie möchtest du das Workout eintragen?",
+                [
+                    "Foto hochladen / machen",
+                    "Als Text eintippen",
+                ],
+                horizontal=True,
+            )
+
+            should_analyze = False
+            workout_text_input = ""
+            photo = None
+            model_to_use = (
+                MISTRAL_TEXT_MODEL
+            )
+
+            content_payload = ""
+            if (
+                input_type
+                == "Foto hochladen / machen"
             ):
-                st.session_state["workout_editor_open"] = True
-
-            if st.session_state.get("workout_editor_open"):
-                changes_applied = render_workout_editor(
-                    current_workout
+                photo = st.camera_input(
+                    "Fotografiere das Whiteboard, "
+                    "einen Zettel oder dein Display"
                 )
 
-                if changes_applied:
-                    with st.spinner(
-                        "Workout wird nach deinen Änderungen neu analysiert ..."
-                    ):
-                        try:
-                            (
-                                deterministic_analysis,
-                                workout_interpretation,
-                            ) = analyze_workout(
-                                parsed_workout=current_workout,
-                                sportart=sportart,
+                should_analyze = st.button(
+                    "📷 Foto analysieren",
+                    disabled=photo is None,
+                    type="primary",
+                    width="stretch",
+                )
+
+                if (
+                    should_analyze
+                    and photo is not None
+                ):
+                    mime_type = (
+                        getattr(
+                            photo,
+                            "type",
+                            None,
+                        )
+                        or "image/jpeg"
+                    )
+
+
+            else:
+                workout_text_input = (
+                    st.text_area(
+                        "Workout hier eintragen",
+                        placeholder=(
+                            "Beispiel:\n"
+                            "Strength: Deadlift 4 × 3\n\n"
+                            "Workout: 5 RFT\n"
+                            "300 m Row\n"
+                            "6 Burpees\n"
+                            "12 Deadlifts"
+                        ),
+                        height=220,
+                    )
+                )
+
+                should_analyze = st.button(
+                    "🧠 Workout analysieren",
+                    disabled=not (
+                        workout_text_input.strip()
+                    ),
+                    type="primary",
+                    width="stretch",
+                )
+
+
+            if should_analyze:
+                with st.spinner(
+                    "Workout wird strukturiert "
+                    "und geprüft ..."
+                ):
+                    try:
+                        if (
+                            input_type
+                            == "Foto hochladen / machen"
+                        ):
+                            parsed_workout = parse_workout(
+                                image_data=photo.getvalue(),
+                                image_mime_type=(
+                                    getattr(photo, "type", None)
+                                    or "image/jpeg"
+                                ),
+                                api_key=MISTRAL_API_KEY,
+                                model=MISTRAL_VISION_MODEL,
+                            )
+                        else:
+                            parsed_workout = parse_workout(
+                                workout_text=workout_text_input.strip(),
                                 api_key=MISTRAL_API_KEY,
                                 model=MISTRAL_TEXT_MODEL,
                             )
-                        except (RuntimeError, ValueError) as exc:
-                            st.error(
-                                "Die geänderte Workout-Version konnte "
-                                f"nicht analysiert werden: {exc}"
-                            )
-                        else:
-                            st.session_state[
-                                "deterministic_analysis"
-                            ] = deterministic_analysis
-                            st.session_state[
-                                "workout_interpretation"
-                            ] = workout_interpretation
-                            st.session_state["save_notice"] = {
-                                "type": "success",
-                                "text": (
-                                    "Workout-Änderungen wurden übernommen "
-                                    "und neu analysiert."
-                                ),
-                            }
-                            st.rerun()
 
-            st.markdown("---")
-            st.subheader(
-                "Wie hat es sich angefühlt?"
+                        deterministic_analysis, workout_interpretation = analyze_workout(
+                            parsed_workout=parsed_workout,
+                            sportart=sportart,
+                            api_key=MISTRAL_API_KEY,
+                            model=MISTRAL_TEXT_MODEL,
+                        )
+
+                        st.session_state["parsed_workout"] = parsed_workout
+                        st.session_state["original_parsed_workout"] = deepcopy(
+                            parsed_workout
+                        )
+                        st.session_state["workout_editor_open"] = False
+                        st.session_state["deterministic_analysis"] = deterministic_analysis
+                        st.session_state["workout_interpretation"] = workout_interpretation
+
+                        st.session_state["letzter_coach_text"] = None
+                        st.session_state["letzter_state_key"] = None
+                        st.session_state["letzter_save_key"] = None
+
+                        st.success("Workout erfolgreich analysiert.")
+
+                    except (
+                        RuntimeError,
+                        ValueError,
+                    ) as exc:
+
+                        st.error(
+                            "Analyse fehlgeschlagen: "
+                            f"{exc}"
+                        )
+
+
+            current_workout = st.session_state.get(
+                "parsed_workout"
             )
 
-            duration_minutes = (
-                st.number_input(
-                    "Trainingsdauer in Minuten",
+            if current_workout:
+                st.markdown("---")
+                st.write(
+                    "### Aktuell erfasstes Training"
+                )
+
+                render_current_workout(
+                    current_workout
+                )
+
+                if st.button(
+                    "✏️ Workout bearbeiten",
+                    width="stretch",
+                    key="open_workout_editor",
+                ):
+                    st.session_state["workout_editor_open"] = True
+
+                if st.session_state.get("workout_editor_open"):
+                    changes_applied = render_workout_editor(
+                        current_workout
+                    )
+
+                    if changes_applied:
+                        with st.spinner(
+                            "Workout wird nach deinen Änderungen neu analysiert ..."
+                        ):
+                            try:
+                                (
+                                    deterministic_analysis,
+                                    workout_interpretation,
+                                ) = analyze_workout(
+                                    parsed_workout=current_workout,
+                                    sportart=sportart,
+                                    api_key=MISTRAL_API_KEY,
+                                    model=MISTRAL_TEXT_MODEL,
+                                )
+                            except (RuntimeError, ValueError) as exc:
+                                st.error(
+                                    "Die geänderte Workout-Version konnte "
+                                    f"nicht analysiert werden: {exc}"
+                                )
+                            else:
+                                st.session_state[
+                                    "deterministic_analysis"
+                                ] = deterministic_analysis
+                                st.session_state[
+                                    "workout_interpretation"
+                                ] = workout_interpretation
+                                st.session_state["save_notice"] = {
+                                    "type": "success",
+                                    "text": (
+                                        "Workout-Änderungen wurden übernommen "
+                                        "und neu analysiert."
+                                    ),
+                                }
+                                st.rerun()
+
+                st.markdown("---")
+                st.subheader(
+                    "Wie hat es sich angefühlt?"
+                )
+
+                duration_minutes = (
+                    st.number_input(
+                        "Trainingsdauer in Minuten",
+                        min_value=1,
+                        max_value=600,
+                        value=int(
+                            st.session_state[
+                                "trainingsdauer"
+                            ]
+                        ),
+                        step=5,
+                    )
+                )
+
+                st.session_state[
+                    "trainingsdauer"
+                ] = int(duration_minutes)
+
+                rpe = st.slider(
+                    "Wie anstrengend war das Workout? "
+                    "RPE 1–10",
                     min_value=1,
-                    max_value=600,
+                    max_value=10,
                     value=int(
                         st.session_state[
-                            "trainingsdauer"
+                            "aktuelles_rpe"
                         ]
                     ),
-                    step=5,
                 )
-            )
 
-            st.session_state[
-                "trainingsdauer"
-            ] = int(duration_minutes)
+                st.session_state[
+                    "aktuelles_rpe"
+                ] = int(rpe)
 
-            rpe = st.slider(
-                "Wie anstrengend war das Workout? "
-                "RPE 1–10",
-                min_value=1,
-                max_value=10,
-                value=int(
-                    st.session_state[
-                        "aktuelles_rpe"
-                    ]
-                ),
-            )
-
-            st.session_state[
-                "aktuelles_rpe"
-            ] = int(rpe)
-
-            workout_comment = (
-                st.text_area(
-                    "Kommentar zum Workout "
-                    "oder zur Tagesform",
-                    value=(
-                        st.session_state[
-                            "workout_kommentar"
-                        ]
-                    ),
-                    placeholder=(
-                        "z. B. Beine waren ab Runde 3 "
-                        "schwer, Puls ungewöhnlich hoch "
-                        "oder sehr gute Tagesform"
-                    ),
+                workout_comment = (
+                    st.text_area(
+                        "Kommentar zum Workout "
+                        "oder zur Tagesform",
+                        value=(
+                            st.session_state[
+                                "workout_kommentar"
+                            ]
+                        ),
+                        placeholder=(
+                            "z. B. Beine waren ab Runde 3 "
+                            "schwer, Puls ungewöhnlich hoch "
+                            "oder sehr gute Tagesform"
+                        ),
+                    )
                 )
-            )
 
-            st.session_state[
-                "workout_kommentar"
-            ] = workout_comment.strip()
+                st.session_state[
+                    "workout_kommentar"
+                ] = workout_comment.strip()
 
-            st.markdown("---")
-            st.subheader("💾 Training dauerhaft sichern")
+                st.markdown("---")
+                st.subheader("💾 Training dauerhaft sichern")
 
-            save_notice = st.session_state.get("save_notice")
-            if save_notice:
-                notice_type = save_notice.get("type", "info")
-                notice_text = save_notice.get("text", "")
+                save_notice = st.session_state.get("save_notice")
+                if save_notice:
+                    notice_type = save_notice.get("type", "info")
+                    notice_text = save_notice.get("text", "")
 
-                if notice_type == "success":
-                    st.success(notice_text)
-                elif notice_type == "warning":
-                    st.warning(notice_text)
-                elif notice_type == "error":
-                    st.error(notice_text)
-                else:
-                    st.info(notice_text)
+                    if notice_type == "success":
+                        st.success(notice_text)
+                    elif notice_type == "warning":
+                        st.warning(notice_text)
+                    elif notice_type == "error":
+                        st.error(notice_text)
+                    else:
+                        st.info(notice_text)
 
-                st.session_state["save_notice"] = None
+                    st.session_state["save_notice"] = None
 
-            if conn is None:
-                st.warning(
-                    "Google Sheets ist derzeit nicht verbunden."
+                if conn is None:
+                    st.warning(
+                        "Google Sheets ist derzeit nicht verbunden."
+                    )
+                    if gsheets_error:
+                        st.caption(gsheets_error)
+
+                if st.button(
+                    "🚀 Workout in Google Sheets speichern",
+                    disabled=conn is None,
+                    type="primary",
+                    width="stretch",
+                    key="save_workout_tab1",
+                ):
+                    st.session_state["pending_save"] = True
+
+                st.caption(
+                    "Beim Speichern werden Workout, Belastungsdaten, "
+                    "Trainingsklassifikation und Coach-Feedback übernommen."
                 )
-                if gsheets_error:
-                    st.caption(gsheets_error)
 
-            if st.button(
-                "🚀 Workout in Google Sheets speichern",
-                disabled=conn is None,
-                type="primary",
-                width="stretch",
-                key="save_workout_tab1",
-            ):
-                st.session_state["pending_save"] = True
+                if st.button(
+                    "🗑️ Aktuelles Workout zurücksetzen",
+                    width="stretch",
+                ):
+                    reset_current_workout()
+                    st.rerun()
 
-            st.caption(
-                "Beim Speichern werden Workout, Belastungsdaten, "
-                "Trainingsklassifikation und Coach-Feedback übernommen."
-            )
-
-            if st.button(
-                "🗑️ Aktuelles Workout zurücksetzen",
-                width="stretch",
-            ):
-                reset_current_workout()
-                st.rerun()
 
 
 # ============================================================
-# TAB 2: STATUS UND COACH-FEEDBACK
+# MEIN COACH · EINORDNUNG
 # ============================================================
 
 with tab2:
@@ -1684,10 +1810,14 @@ with tab2:
         or deterministic_analysis is None
         or workout_interpretation is None
     ):
-        st.info(
-            "Trage zuerst im ersten Tab "
-            "ein Training ein."
-        )
+        athlete_for_coach = st.session_state.get("athleten_name", "").strip()
+        if not athlete_for_coach:
+            st.info("Wähle im Status zuerst dein Athletenprofil aus.")
+        else:
+            st.info(
+                "Für dieses Profil ist noch keine auswertbare Einheit vorhanden. "
+                "Speichere ein Workout, dann aktualisiert sich dein Coach automatisch."
+            )
 
     else:
         user_name = (
@@ -1781,13 +1911,8 @@ with tab2:
         # ----------------------------------------------------
 
         try:
-            training_history = get_user_training_history(
-                conn=conn,
-                spreadsheet_url=SHEET_URL,
-                worksheet_name=WORKSHEET_NAME,
-                columns=SHEET_COLUMNS,
-                athlete_name=user_name,
-                days=90,
+            training_history = _filter_cached_history(
+                st.session_state.get("history_cache"), user_name, days=90
             )
             training_history = normalize_training_dates(
                 training_history
@@ -2163,12 +2288,11 @@ with tab2:
                 )
 
                 try:
-                    existing_data = read_workout_history(
-                        conn=conn,
-                        spreadsheet_url=SHEET_URL,
-                        worksheet_name=WORKSHEET_NAME,
-                        columns=SHEET_COLUMNS,
-                    )
+                    existing_data = st.session_state.get("history_cache")
+                    if existing_data is None:
+                        existing_data = read_workout_history(
+                            conn=conn, spreadsheet_url=SHEET_URL, worksheet_name=WORKSHEET_NAME, columns=SHEET_COLUMNS
+                        )
 
                     updated_data = pd.concat(
                         [existing_data, new_entry],
@@ -2192,6 +2316,15 @@ with tab2:
                     }
                 else:
                     st.session_state["letzter_save_key"] = current_save_key
+                    # Cache lokal mit dem gerade erfolgreich geschriebenen Stand aktualisieren.
+                    # Dadurch ist nach dem Speichern kein zusätzlicher Sheets-Read nötig.
+                    st.session_state["history_cache"] = updated_data.copy()
+                    st.session_state["history_cache_athlete"] = user_name.strip().casefold()
+                    # Erzwingt nach dem Speichern ein Neuladen des Coach-Kontexts
+                    # aus der aktualisierten Historie.
+                    st.session_state["coach_context_key"] = None
+                    st.session_state["coach_context_source"] = None
+                    st.session_state["workout_entry_requested"] = False
                     st.session_state["save_notice"] = {
                         "type": "success",
                         "text": (
@@ -2346,6 +2479,13 @@ with tab2:
             or 0
         )
 
+        st.session_state["status_dashboard_data"] = {
+            "sessions_28": sessions_28,
+            "load_trend": load_trend,
+            "consistency": consistency,
+            "diversity": diversity,
+        }
+
         render_coach_dashboard(
             user_name=user_name,
             user_sport=user_sport,
@@ -2365,13 +2505,14 @@ with tab2:
 
 
 # ============================================================
-# TAB 3: HISTORIE
+# TRAINING · HISTORIE
 # ============================================================
 
 with tab3:
     st.subheader(
-        "📅 Persönliche Trainingshistorie"
+        "🏋️ Training"
     )
+    st.caption("Letzte Einheiten und gespeicherte Trainingshistorie")
 
     search_name = (
         st.session_state.get(
@@ -2401,20 +2542,9 @@ with tab3:
 
     else:
         try:
-            history_df = (
-                read_workout_history(
-                    conn=conn,
-                    spreadsheet_url=(
-                        SHEET_URL
-                    ),
-                    worksheet_name=(
-                        WORKSHEET_NAME
-                    ),
-                    columns=(
-                        SHEET_COLUMNS
-                    ),
-                )
-            )
+            history_df = st.session_state.get("history_cache")
+            if history_df is None:
+                history_df = pd.DataFrame(columns=SHEET_COLUMNS)
 
         except Exception as exc:
             st.error(
@@ -2744,12 +2874,14 @@ with tab3:
 
 
 # ============================================================
-# TAB 3: TRAININGSDETAILS
+# MEIN COACH · ANALYSE
 # ============================================================
 
 with tab4:
-    st.subheader(
-        "🔎 Trainingsdetails"
+    st.subheader("Analyse deiner letzten 28 Tage")
+    st.caption(
+        "So verteilt sich dein Training über Bewegungsmuster, Muskelgruppen, "
+        "Trainingsziele und Belastungsarten."
     )
 
     if (
@@ -2952,60 +3084,133 @@ with tab4:
             ),
         )
 
+        # ----------------------------------------------------
+        # VISUELLE 28-TAGE-ANALYSE
+        # ----------------------------------------------------
+
+        movement_items = [
+            item for item in training_balance.get("movement_patterns", [])
+            if float(item.get("share_percent", 0) or 0) > 0
+        ]
+        muscle_items = [
+            item for item in training_balance.get("muscle_groups", [])
+            if float(item.get("share_percent", 0) or 0) > 0
+        ]
+        goal_items = [
+            item for item in training_balance.get("training_goals", [])
+            if float(item.get("share_percent", 0) or 0) > 0
+        ]
+        load_items = [
+            item for item in training_balance.get("load_types", [])
+            if float(item.get("share_percent", 0) or 0) > 0
+        ]
+
+        chart_left, chart_right = st.columns([1.15, 1], gap="large")
+
+        with chart_left:
+            st.markdown("#### Bewegungsmuster")
+            if movement_items:
+                movement_chart = pd.DataFrame([
+                    {
+                        "Bewegungsmuster": str(item.get("label", "–")),
+                        "Anteil": float(item.get("share_percent", 0) or 0),
+                    }
+                    for item in movement_items
+                ])
+                donut_spec = {
+                    "mark": {"type": "arc", "innerRadius": 62, "outerRadius": 105},
+                    "encoding": {
+                        "theta": {"field": "Anteil", "type": "quantitative", "stack": True},
+                        "color": {
+                            "field": "Bewegungsmuster",
+                            "type": "nominal",
+                            "legend": {"orient": "bottom", "title": None, "columns": 2},
+                        },
+                        "tooltip": [
+                            {"field": "Bewegungsmuster", "type": "nominal"},
+                            {"field": "Anteil", "type": "quantitative", "format": ".1f", "title": "Anteil %"},
+                        ],
+                    },
+                    "view": {"stroke": None},
+                    "height": 300,
+                }
+                st.vega_lite_chart(movement_chart, donut_spec, width="stretch")
+                with st.expander("Details anzeigen", expanded=False):
+                    render_balance_dimension("Bewegungsmuster · Details", training_balance.get("movement_patterns", []), max_rows=11)
+            else:
+                st.info("Noch keine Bewegungsmuster für die letzten 28 Tage verfügbar.")
+
+        with chart_right:
+            st.markdown("#### Muskelgruppen")
+            if muscle_items:
+                muscle_chart = (
+                    pd.DataFrame([
+                        {
+                            "Muskelgruppe": str(item.get("label", "–")),
+                            "Anteil": float(item.get("share_percent", 0) or 0),
+                        }
+                        for item in muscle_items[:8]
+                    ])
+                    .sort_values("Anteil", ascending=True)
+                    .set_index("Muskelgruppe")
+                )
+                st.bar_chart(muscle_chart, horizontal=True, width="stretch")
+                with st.expander("Details anzeigen", expanded=False):
+                    render_balance_dimension("Muskelgruppen · Details", training_balance.get("muscle_groups", []), max_rows=12)
+            else:
+                st.info("Noch keine Muskelgruppenverteilung verfügbar.")
+
+        visual_left, visual_right = st.columns(2, gap="large")
+        with visual_left:
+            st.markdown("#### Trainingsziele")
+            if goal_items:
+                goal_chart = (
+                    pd.DataFrame([
+                        {
+                            "Trainingsziel": str(item.get("label", "–")),
+                            "Anteil": float(item.get("share_percent", 0) or 0),
+                        }
+                        for item in goal_items[:8]
+                    ])
+                    .sort_values("Anteil", ascending=True)
+                    .set_index("Trainingsziel")
+                )
+                st.bar_chart(goal_chart, horizontal=True, width="stretch")
+                with st.expander("Details anzeigen", expanded=False):
+                    render_balance_dimension("Trainingsziele · Details", training_balance.get("training_goals", []), max_rows=12)
+            else:
+                st.info("Noch keine Trainingsziel-Verteilung verfügbar.")
+
+        with visual_right:
+            st.markdown("#### Belastungsarten")
+            if load_items:
+                load_chart = (
+                    pd.DataFrame([
+                        {
+                            "Belastungsart": str(item.get("label", "–")),
+                            "Anteil": float(item.get("share_percent", 0) or 0),
+                        }
+                        for item in load_items[:8]
+                    ])
+                    .sort_values("Anteil", ascending=True)
+                    .set_index("Belastungsart")
+                )
+                st.bar_chart(load_chart, horizontal=True, width="stretch")
+                with st.expander("Details anzeigen", expanded=False):
+                    render_balance_dimension("Belastungsarten · Details", training_balance.get("load_types", []), max_rows=10)
+            else:
+                st.info("Noch keine Belastungsarten-Verteilung verfügbar.")
+
         st.markdown("### Detaillierte Trainingsanalyse")
-
-        st.markdown("#### Trainingsbalance · 28 Tage")
         st.caption(
-            "Zielabhängige Einordnung der Trainingsbestandteile. "
-            "Der Trend zeigt die letzten 14 Tage im Vergleich zu den "
-            "vorherigen 14 Tagen. Unterrepräsentiert bedeutet nicht "
-            "automatisch Untertraining, sondern eine relevante Lücke "
-            "im aktuellen Trainingsmix."
+            "Die Detailwerte der vier Trainingsdimensionen kannst du direkt "
+            "unter der jeweiligen Grafik über ‚Details anzeigen‘ aufklappen."
         )
 
-        balance_tab1, balance_tab2, balance_tab3, balance_tab4, balance_tab5 = st.tabs(
-            [
-                "Bewegungsmuster",
-                "Trainingsarten",
-                "Muskelgruppen",
-                "Belastungsarten",
-                "CrossFit Skills"
-            ]
-        )
-
-        with balance_tab1:
-            render_balance_dimension(
-                "Bewegungsmuster",
-                training_balance.get("movement_patterns", []),
-                max_rows=11,
-            )
-
-        with balance_tab2:
-            render_balance_dimension(
-                "Trainingsarten / Trainingsziele",
-                training_balance.get("training_goals", []),
-                max_rows=12,
-            )
-
-        with balance_tab3:
-            render_balance_dimension(
-                "Muskelgruppen",
-                training_balance.get("muscle_groups", []),
-                max_rows=12,
-            )
-
-        with balance_tab4:
-            render_balance_dimension(
-                "Belastungsarten",
-                training_balance.get("load_types", []),
-                max_rows=10,
-            )
-
-        with balance_tab5:
-            render_crossfit_movements(
-                training_balance.get("crossfit_movements", []),
-                max_rows=15,
-            )
+        crossfit_items = training_balance.get("crossfit_movements", [])
+        if str(user_sport).casefold() == "crossfit" and crossfit_items:
+            with st.expander("CrossFit Skills anzeigen", expanded=False):
+                render_crossfit_movements(crossfit_items, max_rows=15)
 
         st.markdown("#### Priorisierte Balance-Hinweise")
 
