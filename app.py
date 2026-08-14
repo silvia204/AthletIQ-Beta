@@ -26,7 +26,6 @@ from services.date_utils import (
 )
 from ui.coach_dashboard import render_coach_dashboard
 from ui.status_dashboard import render_status_dashboard
-from ui.crossfit_dashboard import render_crossfit_dashboard
 
 from services.history import (
     build_history_summary,
@@ -48,10 +47,14 @@ from services.utils import (
     create_stable_hash,
     format_workout_as_text,
     json_dumps_for_sheet,
+    json_loads_from_sheet,
     safely_convert_to_int,
 )
 
 from ui.theme import apply_theme
+from models.deterministic_analysis import DeterministicAnalysis
+from models.workout_interpretation import WorkoutInterpretation
+from models.training_volume import TrainingVolume
 
 
 # ============================================================
@@ -1292,12 +1295,12 @@ if user_profile is not None:
 
 with header_action_col:
     if st.button(
-        "＋",
+        "＋ Neues Training",
         key="global_new_workout",
         type="primary",
         width="stretch",
         disabled=user_profile is None,
-        help="Neues Training eintragen",
+        help="Training per Foto oder Text erfassen",
     ):
         st.session_state["workout_entry_requested"] = True
         st.rerun()
@@ -1333,11 +1336,10 @@ with tab0:
             status_history = pd.DataFrame(columns=SHEET_COLUMNS)
             st.warning(f"Die Trainingshistorie konnte nicht geladen werden: {exc}")
 
-        # Coach-Kontext automatisch aus der letzten gespeicherten Einheit laden.
-        # Der Schlüssel ändert sich bei Athletenwechsel und sobald ein neues
-        # Workout gespeichert wurde. Dadurch aktualisiert sich „Mein Coach“
-        # automatisch, ohne dass zuerst ein Workout im aktuellen Lauf
-        # analysiert werden muss.
+        # Coach-Kontext direkt aus den bereits gespeicherten Analyse-JSONs laden.
+        # Wichtig: Ein gespeichertes Workout wird hier NICHT erneut durch Mistral
+        # geparst oder interpretiert. Das vermeidet teure Netzwerkaufrufe bei
+        # Athletenwahl und normalen Streamlit-Reruns.
         if not status_history.empty:
             latest_for_coach = sort_training_history(status_history).iloc[0]
             latest_stamp = str(latest_for_coach.get("zeitstempel", ""))
@@ -1348,23 +1350,32 @@ with tab0:
                 "workout": latest_workout_text,
             })
 
-            if (
-                latest_workout_text
-                and st.session_state.get("coach_context_key") != coach_context_key
-            ):
+            if st.session_state.get("coach_context_key") != coach_context_key:
                 try:
-                    latest_parsed = parse_workout(
-                        workout_text=latest_workout_text,
-                        api_key=MISTRAL_API_KEY,
-                        model=MISTRAL_TEXT_MODEL,
+                    volume_data = json_loads_from_sheet(
+                        latest_for_coach.get("trainingsvolumen_json")
+                    ) or {}
+                    if not isinstance(volume_data, dict):
+                        volume_data = {}
+
+                    latest_analysis = DeterministicAnalysis(
+                        bewegungsmuster=json_loads_from_sheet(latest_for_coach.get("bewegungsmuster_json")) or {},
+                        muskelgruppen=json_loads_from_sheet(latest_for_coach.get("muskelgruppen_json")) or {},
+                        movements=json_loads_from_sheet(latest_for_coach.get("crossfit_movements_json")) or {},
+                        trainingsvolumen=TrainingVolume(
+                            **{key: value for key, value in volume_data.items()
+                               if key in TrainingVolume.__dataclass_fields__}
+                        ),
                     )
-                    latest_analysis, latest_interpretation = analyze_workout(
-                        parsed_workout=latest_parsed,
-                        sportart=sportart,
-                        api_key=MISTRAL_API_KEY,
-                        model=MISTRAL_TEXT_MODEL,
+                    latest_interpretation = WorkoutInterpretation(
+                        trainingsziele=json_loads_from_sheet(latest_for_coach.get("trainingsziele_json")) or {},
+                        belastungsarten=json_loads_from_sheet(latest_for_coach.get("belastungsarten_json")) or {},
+                        klassifikation=json_loads_from_sheet(latest_for_coach.get("klassifikation_json")) or {},
                     )
-                    st.session_state["parsed_workout"] = latest_parsed
+
+                    # parsed_workout bleibt bei History-Kontext bewusst leer. Es wird
+                    # nur für ein neu erfasstes Workout benötigt.
+                    st.session_state["parsed_workout"] = None
                     st.session_state["deterministic_analysis"] = latest_analysis
                     st.session_state["workout_interpretation"] = latest_interpretation
                     st.session_state["aktuelles_rpe"] = safely_convert_to_int(
@@ -1379,12 +1390,15 @@ with tab0:
                     st.session_state["workout_kommentar"] = str(
                         latest_for_coach.get("kommentar", "") or ""
                     )
+                    st.session_state["letzter_coach_text"] = str(
+                        latest_for_coach.get("coach_feedback", "") or ""
+                    ).strip() or None
                     st.session_state["coach_context_key"] = coach_context_key
-                    st.session_state["coach_context_source"] = "history"
+                    st.session_state["coach_context_source"] = "history_cached"
                 except Exception as exc:
                     st.warning(
-                        "Die letzte Einheit wurde geladen, konnte aber nicht "
-                        f"für den Coach aufbereitet werden: {exc}"
+                        "Die gespeicherten Analysedaten der letzten Einheit konnten "
+                        f"nicht vollständig geladen werden: {exc}"
                     )
         else:
             st.session_state["coach_context_key"] = create_stable_hash({
@@ -1442,7 +1456,8 @@ with tab0:
         st.markdown("---")
         top_left, top_right = st.columns([4, 1])
         with top_left:
-            st.subheader("Neues Workout erfassen")
+            st.markdown("## Neues Training")
+            st.caption("Erfasse dein Workout per Foto oder Text. Die Erkennung kannst du vor dem Speichern wie gewohnt prüfen und anpassen.")
         with top_right:
             if st.button("← Zurück", key="close_workout_entry", width="stretch"):
                 st.session_state["workout_entry_requested"] = False
@@ -1483,13 +1498,12 @@ with tab0:
             )
 
         else:
+            st.markdown("### Wie möchtest du dein Training eintragen?")
             input_type = st.radio(
-                "Wie möchtest du das Workout eintragen?",
-                [
-                    "Foto hochladen / machen",
-                    "Als Text eintippen",
-                ],
+                "Eingabeart",
+                ["📷 Foto", "✎ Text"],
                 horizontal=True,
+                label_visibility="collapsed",
             )
 
             should_analyze = False
@@ -1502,7 +1516,7 @@ with tab0:
             content_payload = ""
             if (
                 input_type
-                == "Foto hochladen / machen"
+                == "📷 Foto"
             ):
                 photo = st.camera_input(
                     "Fotografiere das Whiteboard, "
@@ -1793,6 +1807,8 @@ with tab2:
         "📊 Trainingsanalyse und Belastung"
     )
 
+    # Immer aus Session State lesen. History-Kontext wird beim Athletenladen
+    # bereits aus den gespeicherten Analyse-JSONs rekonstruiert.
     parsed_workout = st.session_state.get(
         "parsed_workout"
     )
@@ -1806,8 +1822,7 @@ with tab2:
     )
 
     if (
-        parsed_workout is None
-        or deterministic_analysis is None
+        deterministic_analysis is None
         or workout_interpretation is None
     ):
         athlete_for_coach = st.session_state.get("athleten_name", "").strip()
@@ -1870,24 +1885,25 @@ with tab2:
             )
         )
 
-        structural_score = (
-            calculate_structural_score(
-                parsed_workout
-            )
-        )
-
-        total_score = (
-            calculate_load_score(
-                structural_score=(
-                    structural_score
-                ),
+        if parsed_workout is not None:
+            structural_score = calculate_structural_score(parsed_workout)
+            total_score = calculate_load_score(
+                structural_score=structural_score,
                 rpe=user_rpe,
-                duration_minutes=(
-                    duration_minutes
-                ),
+                duration_minutes=duration_minutes,
                 level=user_level,
             )
-        )
+        else:
+            # History-Kontext: Score wurde bereits beim Speichern berechnet.
+            structural_score = 0
+            cached_history = _filter_cached_history(
+                st.session_state.get("history_cache"), user_name, days=90
+            )
+            latest_saved = sort_training_history(cached_history).iloc[0] if not cached_history.empty else {}
+            total_score = safely_convert_to_int(
+                latest_saved.get("score") if hasattr(latest_saved, "get") else 0,
+                default=0,
+            )
 
         level_factor = (
             get_level_factor(
@@ -1902,9 +1918,16 @@ with tab2:
             total_score
         )
 
-        current_workout_text = format_workout_as_text(
-            parsed_workout
-        )
+        if parsed_workout is not None:
+            current_workout_text = format_workout_as_text(parsed_workout)
+        else:
+            cached_history = _filter_cached_history(
+                st.session_state.get("history_cache"), user_name, days=90
+            )
+            latest_saved = sort_training_history(cached_history).iloc[0] if not cached_history.empty else {}
+            current_workout_text = str(
+                latest_saved.get("workout", "") if hasattr(latest_saved, "get") else ""
+            ).strip()
 
         # ----------------------------------------------------
         # HISTORIE LADEN
@@ -2070,6 +2093,11 @@ with tab2:
                 "weekly_focus": weekly_focus,
             }
         )
+
+        if st.session_state.get("coach_context_source") == "history_cached":
+            # Gespeichertes Coach-Feedback verwenden; kein neuer Mistral-Aufruf
+            # bei Athletenwahl, Tabwechsel oder Details-Toggles.
+            st.session_state["letzter_state_key"] = coach_state_key
 
         if (
             st.session_state.get("letzter_state_key")
@@ -2884,206 +2912,20 @@ with tab4:
         "Trainingsziele und Belastungsarten."
     )
 
-    if (
-        parsed_workout is None
-        or deterministic_analysis is None
-        or workout_interpretation is None
-    ):
+    # Die 28-Tage-Analyse basiert auf der gespeicherten Historie.
+    # Ein neu eingegebenes Workout ist dafür nicht erforderlich.
+    analysis_history_available = (
+        "training_balance" in locals()
+        and isinstance(training_balance, dict)
+        and bool(training_balance)
+    )
+
+    if not analysis_history_available:
         st.info(
-            "Trage zuerst im ersten Tab ein Training ein, "
-            "um die detaillierte Trainingsanalyse zu laden."
+            "Für dieses Profil ist noch keine auswertbare Trainingshistorie vorhanden."
         )
 
     else:
-        safe_user_name = html.escape(
-            str(user_name or "Unbekannt")
-        )
-        safe_user_sport = html.escape(
-            str(user_sport or "Nicht angegeben")
-        )
-        safe_user_level = html.escape(
-            str(user_level or "Nicht angegeben")
-        )
-
-        st.markdown(
-            f"""
-            <div class="welcome-card">
-                <div class="welcome-title">
-                    Willkommen zurück, {safe_user_name}
-                </div>
-                <div>
-                    {safe_user_sport} &nbsp;·&nbsp; {safe_user_level}
-                    &nbsp;·&nbsp; {sessions_28} Workouts in 28 Tagen
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        smart_left, smart_right = st.columns(
-            [1, 1.35],
-            gap="large",
-        )
-
-        with smart_left:
-            readiness_status = str(
-                readiness.get(
-                    "status",
-                    "high",
-                )
-            )
-
-            readiness_config = {
-                "high": {
-                    "css_class": "good",
-                    "icon": "🟢",
-                    "label": "Hohe Trainingsbereitschaft",
-                    "detail": (
-                        "Aktuell wurden keine relevanten "
-                        "Überlastungssignale erkannt."
-                    ),
-                },
-                "moderate": {
-                    "css_class": "moderate",
-                    "icon": "🟡",
-                    "label": "Trainingsbereitschaft beobachten",
-                    "detail": (
-                        "Es liegt mindestens ein relevantes "
-                        "Belastungssignal vor."
-                    ),
-                },
-                "low": {
-                    "css_class": "warning",
-                    "icon": "🔴",
-                    "label": "Trainingsbereitschaft reduziert",
-                    "detail": (
-                        "Mehrere Überlastungssignale wurden "
-                        "erkannt."
-                    ),
-                },
-            }
-
-            readiness_display = readiness_config.get(
-                readiness_status,
-                readiness_config["high"],
-            )
-
-            st.markdown(
-                f"""
-                <div class="readiness-card {readiness_display['css_class']}">
-                    <div class="muted-label">Trainings-Check-in</div>
-                    <div class="readiness-title">
-                        {readiness_display['icon']}
-                        {html.escape(readiness_display['label'])}
-                    </div>
-                    <div>
-                        {html.escape(readiness_display['detail'])}
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        with smart_right:
-            st.markdown(
-                f"""
-                <div class="focus-card">
-                    <div class="muted-label">Fokus der nächsten Tage</div>
-                    <div class="readiness-title">
-                        {html.escape(
-                            str(
-                                weekly_focus.get(
-                                    "title",
-                                    "Training fortsetzen",
-                                )
-                            )
-                        )}
-                    </div>
-                    <div>
-                        {html.escape(str(weekly_focus.get('reason', '')))}
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        st.markdown("#### Was gut läuft")
-
-        if positive_observations:
-            positive_columns = st.columns(
-                len(positive_observations)
-            )
-
-            for column, observation in zip(
-                positive_columns,
-                positive_observations,
-            ):
-                with column:
-                    observation_title = str(
-                        observation.get(
-                            "title",
-                            "Positive Entwicklung",
-                        )
-                    )
-
-                    observation_message = str(
-                        observation.get(
-                            "message",
-                            "",
-                        )
-                    )
-
-                    st.markdown(
-                        f"""
-                        <div class="positive-card">
-                            <strong>✓ {html.escape(observation_title)}</strong>
-                            <div>
-                                {html.escape(observation_message)}
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-        else:
-            st.caption(
-                "Für eine positive Trendbewertung sind "
-                "noch weitere Trainingsdaten erforderlich."
-            )
-
-        dashboard_col1, dashboard_col2, dashboard_col3, dashboard_col4 = (
-            st.columns(4)
-        )
-
-        dashboard_col1.metric(
-            "Aktuell · 7 Tage",
-            f"{sessions_7} Einheiten",
-            (
-                f"Ø RPE {average_rpe_7:.1f}"
-                if average_rpe_7 > 0
-                else None
-            ),
-        )
-        dashboard_col2.metric(
-            "Unterrepräsentiert · 28 Tage",
-            int(balance_overview.get("underrepresented", 0) or 0),
-            "über alle Trainingsbereiche",
-        )
-        dashboard_col3.metric(
-            "Überrepräsentiert · 28 Tage",
-            int(balance_overview.get("overrepresented", 0) or 0),
-            "über alle Trainingsbereiche",
-        )
-        dashboard_col4.metric(
-            "Trainingsroutine · 28 Tage",
-            consistency.get(
-                "text",
-                "Noch nicht bewertbar",
-            ),
-            (
-                f"{consistency.get('active_weeks', 0)} von 4 Wochen aktiv"
-            ),
-        )
-
         # ----------------------------------------------------
         # VISUELLE 28-TAGE-ANALYSE
         # ----------------------------------------------------
@@ -3201,18 +3043,16 @@ with tab4:
             else:
                 st.info("Noch keine Belastungsarten-Verteilung verfügbar.")
 
-        st.markdown("### Detaillierte Trainingsanalyse")
+        # ----------------------------------------------------
+        # AUFFÄLLIGKEITEN
+        # ----------------------------------------------------
+
+        st.markdown("### Auffälligkeiten")
         st.caption(
-            "Die Detailwerte der vier Trainingsdimensionen kannst du direkt "
-            "unter der jeweiligen Grafik über ‚Details anzeigen‘ aufklappen."
+            "Hier erscheinen nur relevante Abweichungen im aktuellen "
+            "Trainingsmix. Die vollständigen Einzelwerte findest du über "
+            "‚Details anzeigen‘ direkt an den Grafiken."
         )
-
-        crossfit_items = training_balance.get("crossfit_movements", [])
-        if str(user_sport).casefold() == "crossfit" and crossfit_items:
-            with st.expander("CrossFit Skills anzeigen", expanded=False):
-                render_crossfit_movements(crossfit_items, max_rows=15)
-
-        st.markdown("#### Priorisierte Balance-Hinweise")
 
         if balance_findings:
             finding_columns = st.columns(2, gap="large")
@@ -3234,436 +3074,103 @@ with tab4:
                 "innerhalb der hinterlegten Zielkorridore."
             )
 
-        st.markdown("#### Entwicklung · 14 Tage")
+        # CrossFit bleibt eine sportartspezifische Vertiefung und nimmt
+        # deshalb keinen permanenten Platz in der allgemeinen Analyse ein.
+        crossfit_items = training_balance.get("crossfit_movements", [])
+        if str(user_sport).casefold() == "crossfit" and crossfit_items:
+            with st.expander("CrossFit Skills · Details anzeigen", expanded=False):
+                render_crossfit_movements(crossfit_items, max_rows=15)
+
+        # ----------------------------------------------------
+        # ENTWICKLUNG
+        # ----------------------------------------------------
+
+        st.markdown("### Entwicklung")
         st.caption(
-            "Vergleich der letzten 14 Tage mit den "
-            "vorherigen 14 Tagen."
+            "Vergleich der letzten 14 Tage mit den vorherigen 14 Tagen. "
+            "Der Belastungsverlauf darunter zeigt die letzten 28 Tage."
         )
 
-        trend_col1, trend_col2, trend_col3 = st.columns(
-            3
-        )
+        trend_col1, trend_col2, trend_col3 = st.columns(3)
 
         trend_col1.metric(
             "Belastung",
-            load_trend.get(
-                "text",
-                "Noch nicht bewertbar",
-            ),
+            load_trend.get("text", "Noch nicht bewertbar"),
             (
                 f"{load_trend.get('change_percent'):+.1f} %"
-                if load_trend.get(
-                    "change_percent"
-                ) is not None
+                if load_trend.get("change_percent") is not None
                 else None
             ),
         )
 
         trend_col2.metric(
             "Trainingshäufigkeit",
-            frequency_trend.get(
-                "text",
-                "Noch nicht bewertbar",
-            ),
-            (
-                f"{frequency_trend.get('current_sessions', 0)} "
-                "Einheiten"
-            ),
+            frequency_trend.get("text", "Noch nicht bewertbar"),
+            f"{frequency_trend.get('current_sessions', 0)} Einheiten",
         )
 
         trend_col3.metric(
             "Intensität",
-            rpe_trend.get(
-                "text",
-                "Noch nicht bewertbar",
-            ),
+            rpe_trend.get("text", "Noch nicht bewertbar"),
             (
                 f"Ø RPE {rpe_trend.get('current_value', 0):.1f}"
-                if float(
-                    rpe_trend.get(
-                        "current_value",
-                        0,
-                    )
-                    or 0
-                ) > 0
+                if float(rpe_trend.get("current_value", 0) or 0) > 0
                 else None
             ),
         )
 
-        trend_detail_left, trend_detail_right = st.columns(
-            2,
-            gap="large",
-        )
+        trend_detail_left, trend_detail_right = st.columns(2, gap="large")
 
         with trend_detail_left:
             st.markdown("##### Trainingsziele")
-
             if goal_trends:
                 for item in goal_trends[:4]:
-                    st.write(
-                        f"{item.get('symbol', '•')} "
-                        f"{item.get('text', '')}"
-                    )
+                    st.write(f"{item.get('symbol', '•')} {item.get('text', '')}")
             else:
-                st.caption(
-                    "Noch keine klaren Veränderungen "
-                    "bei den Trainingszielen."
-                )
+                st.caption("Noch keine klaren Veränderungen bei den Trainingszielen.")
 
         with trend_detail_right:
             st.markdown("##### Bewegungsmuster")
-
             if movement_trends:
                 for item in movement_trends[:4]:
-                    st.write(
-                        f"{item.get('symbol', '•')} "
-                        f"{item.get('text', '')}"
-                    )
+                    st.write(f"{item.get('symbol', '•')} {item.get('text', '')}")
             else:
-                st.caption(
-                    "Noch keine klaren Veränderungen "
-                    "bei den Bewegungsmustern."
-                )
+                st.caption("Noch keine klaren Veränderungen bei den Bewegungsmustern.")
 
-        overview_left, overview_right = st.columns(
-            [1.65, 1],
-            gap="large",
-        )
+        st.markdown("#### Belastungsverlauf · 28 Tage")
 
-        with overview_left:
-            st.markdown("#### Ergänzend: Belastungsverlauf · 28 Tage")
+        chart_history = training_history.copy()
+        if not chart_history.empty:
+            timestamp_column = (
+                "zeitstempel_parsed"
+                if "zeitstempel_parsed" in chart_history.columns
+                else "zeitstempel"
+            )
+            chart_history["dashboard_date"] = pd.to_datetime(
+                chart_history[timestamp_column], errors="coerce", utc=True
+            )
+            chart_history["dashboard_score"] = pd.to_numeric(
+                chart_history.get("score", 0), errors="coerce"
+            ).fillna(0)
 
-            chart_history = training_history.copy()
+            daily_load = (
+                chart_history
+                .dropna(subset=["dashboard_date"])
+                .assign(dashboard_date=lambda frame: frame["dashboard_date"].dt.date)
+                .groupby("dashboard_date", as_index=False)["dashboard_score"]
+                .sum()
+                .rename(columns={
+                    "dashboard_date": "zeitstempel",
+                    "dashboard_score": "Belastung",
+                })
+                .set_index("zeitstempel")
+            )
 
-            if not chart_history.empty:
-                timestamp_column = (
-                    "zeitstempel_parsed"
-                    if "zeitstempel_parsed"
-                    in chart_history.columns
-                    else "zeitstempel"
-                )
-
-                chart_history[
-                    "dashboard_date"
-                ] = pd.to_datetime(
-                    chart_history[
-                        timestamp_column
-                    ],
-                    errors="coerce",
-                    utc=True,
-                )
-
-                chart_history[
-                    "dashboard_score"
-                ] = pd.to_numeric(
-                    chart_history.get(
-                        "score",
-                        0,
-                    ),
-                    errors="coerce",
-                ).fillna(0)
-
-                daily_load = (
-                    chart_history
-                    .dropna(
-                        subset=[
-                            "dashboard_date"
-                        ]
-                    )
-                    .assign(
-                        dashboard_date=lambda frame: (
-                            frame[
-                                "dashboard_date"
-                            ].dt.date
-                        )
-                    )
-                    .groupby(
-                        "dashboard_date",
-                        as_index=False,
-                    )[
-                        "dashboard_score"
-                    ]
-                    .sum()
-                    .rename(
-                        columns={
-                            "dashboard_date": "zeitstempel",
-                            "dashboard_score": "Belastung",
-                        }
-                    )
-                    .set_index("zeitstempel")
-                )
-
-                if not daily_load.empty:
-                    st.line_chart(
-                        daily_load,
-                        width="stretch",
-                    )
-                else:
-                    st.info(
-                        "Für den Belastungstrend fehlen "
-                        "gültige Datumswerte."
-                    )
+            if not daily_load.empty:
+                st.line_chart(daily_load, width="stretch")
             else:
-                st.info(
-                    "Der Belastungstrend erscheint nach "
-                    "dem ersten gespeicherten Workout."
-                )
-
-        with overview_right:
-            st.markdown("#### Aktuelles Workout")
-
-            current_col1, current_col2 = (
-                st.columns(2)
-            )
-
-            current_col1.metric(
-                "Aktuelle Belastung",
-                total_score,
-            )
-            current_col2.metric(
-                "Findings",
-                finding_count,
-            )
-
-            st.caption(
-                f"7-Tage-Load: {load_7:.0f} · "
-                f"Workoutdauer: {duration_minutes} Min. · "
-                f"RPE: {user_rpe}/10"
-            )
-
-        quality_col1, quality_col2 = st.columns(
-            2
-        )
-
-        quality_col1.metric(
-            "Trainingsvielfalt · 28 Tage",
-            diversity.get(
-                "text",
-                "Noch nicht bewertbar",
-            ),
-            f"{diversity.get('score', 0)} %",
-        )
-        quality_col2.metric(
-            "Trainingsroutine · 28 Tage",
-            consistency.get(
-                "text",
-                "Noch nicht bewertbar",
-            ),
-            (
-                f"{consistency.get('active_weeks', 0)} "
-                "von 4 Wochen aktiv"
-            ),
-        )
-
-        mix_col, findings_col = st.columns(
-            [1, 1],
-            gap="large",
-        )
-
-        with mix_col:
-            st.markdown("#### Trainingsmix · 28 Tage")
-
-            goal_counts = (
-                window_28.get(
-                    "training_goals",
-                    {},
-                )
-                or {}
-            )
-
-            if isinstance(
-                goal_counts,
-                dict,
-            ) and goal_counts:
-                goal_labels = {
-                    "max_strength": "Maximalkraft",
-                    "hypertrophy": "Muskelaufbau",
-                    "strength_endurance": "Kraftausdauer",
-                    "speed_strength": "Schnellkraft",
-                    "explosive_strength": "Explosivkraft",
-                    "aerobic_base": "Aerobe Basis",
-                    "threshold": "Schwelle",
-                    "vo2max": "VO₂max",
-                    "anaerobic_capacity": "Anaerob",
-                    "technique": "Technik",
-                    "mobility": "Mobilität",
-                    "recovery": "Regeneration",
-                }
-
-                mix_data = pd.DataFrame(
-                    [
-                        {
-                            "Trainingsziel": (
-                                goal_labels.get(
-                                    str(key),
-                                    str(key).replace(
-                                        "_",
-                                        " ",
-                                    ).title(),
-                                )
-                            ),
-                            "Einheiten": float(
-                                value
-                            ),
-                        }
-                        for key, value
-                        in goal_counts.items()
-                        if float(
-                            value or 0
-                        ) > 0
-                    ]
-                )
-
-                if not mix_data.empty:
-                    mix_data = (
-                        mix_data.sort_values(
-                            "Einheiten",
-                            ascending=False,
-                        )
-                        .set_index(
-                            "Trainingsziel"
-                        )
-                    )
-
-                    st.bar_chart(
-                        mix_data,
-                        horizontal=True,
-                        width="stretch",
-                    )
-                else:
-                    st.info(
-                        "Noch kein Trainingsmix verfügbar."
-                    )
-            else:
-                st.info(
-                    "Der Trainingsmix wird nach mehreren "
-                    "klassifizierten Workouts sichtbar."
-                )
-
-        with findings_col:
-            st.markdown("#### Gesamtbelastung & Regeneration")
-
-            top_findings = (
-                training_analysis.top_findings or []
-            )[:3]
-
-            if not top_findings:
-                st.success(
-                    "Aktuell wurden keine relevanten "
-                    "Auffälligkeiten erkannt."
-                )
-            else:
-                for finding in top_findings:
-                    finding_title = str(
-                        finding.get(
-                            "title",
-                            "Trainingshinweis",
-                        )
-                    )
-
-                    finding_type = str(
-                        finding.get(
-                            "type",
-                            "training",
-                        )
-                    ).replace(
-                        "_",
-                        " ",
-                    ).title()
-
-                    details = finding.get(
-                        "details",
-                        {},
-                    )
-
-                    if isinstance(details, dict):
-                        finding_text = str(
-                            details.get(
-                                "reason",
-                                details.get(
-                                    "message",
-                                    "",
-                                ),
-                            )
-                        )
-                    else:
-                        finding_text = str(
-                            details or ""
-                        )
-
-                    st.markdown(
-                        f"""
-                        <div class="finding-card">
-                            <div class="muted-label">
-                                {html.escape(finding_type)}
-                            </div>
-                            <strong>
-                                {html.escape(finding_title)}
-                            </strong>
-                            <div>
-                                {html.escape(finding_text)}
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-        # with st.expander(
-        #     "🔧 Regelbasierte Trainingsanalyse",
-        #     expanded=False,
-        # ):
-        #     st.json(training_analysis)
-
-        # ----------------------------------------------------
-        # AKTUELLE BELASTUNG
-        # ----------------------------------------------------
-
-        st.write(
-            f"### Analyse für {user_name}"
-        )
-
-        metric_col1, metric_col2, metric_col3 = (
-            st.columns(3)
-        )
-
-        metric_col1.metric(
-            "Dauer",
-            f"{duration_minutes} Min.",
-        )
-
-        metric_col2.metric(
-            "RPE",
-            f"{user_rpe} / 10",
-        )
-
-        metric_col3.metric(
-            "Belastung",
-            f"{total_score} Punkte",
-        )
-
-        st.write(
-            f"**Trainingslevel:** "
-            f"`{user_level}`"
-        )
-
-        st.write(
-            f"**Level-Faktor:** "
-            f"`× {level_factor:.2f}`"
-        )
-
-        st.write(
-            "**Struktureller Workout-Wert:** "
-            f"`{structural_score}`"
-        )
-
-        # ----------------------------------------------------
-        # CROSSFIT DASHBOARD
-        # ----------------------------------------------------
-
-        if str(user_sport).casefold() == "crossfit":
-
-            st.divider()
-
-            render_crossfit_dashboard(
-                history_summary=history_summary,
+                st.info("Für den Belastungstrend fehlen gültige Datumswerte.")
+        else:
+            st.info(
+                "Der Belastungstrend erscheint nach dem ersten gespeicherten Workout."
             )

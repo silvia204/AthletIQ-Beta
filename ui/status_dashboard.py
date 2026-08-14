@@ -19,6 +19,20 @@ def _status_label(readiness: dict[str, Any]) -> tuple[str, str]:
     return "Gut ausbalanciert", "status-good"
 
 
+def _is_meaningful_focus(weekly_focus: dict[str, Any]) -> bool:
+    title = str(weekly_focus.get("title") or "").strip().casefold()
+    reason = str(weekly_focus.get("reason") or "").strip()
+    priority = str(weekly_focus.get("priority") or "low").strip().casefold()
+    generic_titles = {
+        "",
+        "training fortsetzen",
+        "bestehenden plan beibehalten",
+        "plan beibehalten",
+        "unterrepräsentierte bereiche trainieren",
+    }
+    return bool(reason and title not in generic_titles and priority in {"high", "medium"})
+
+
 def render_status_dashboard(
     *,
     user_name: str,
@@ -34,19 +48,17 @@ def render_status_dashboard(
     trend_analysis: dict[str, Any] | None = None,
     recent_sessions: list[dict[str, Any]] | None = None,
 ) -> None:
-    first_name = (user_name or "Athlet").strip().split()[0]
     label, css_class = _status_label(readiness)
-
     active_weeks = int(consistency.get("active_weeks", 0) or 0)
     diversity_text = diversity.get("text", "Noch nicht bewertbar")
     load_text = load_trend.get("text", "Noch nicht bewertbar")
 
     st.markdown(
         f'''<div class="status-card status-week-card">
-        <div class="status-card-heading">DEINE WOCHE</div>
+        <div class="status-card-heading">ÜBERSICHT · LETZTE 28 TAGE</div>
         <span class="status-pill {css_class}">{_safe(label)}</span>
         <div class="status-metric-grid">
-          <div><strong>{int(sessions_28 or 0)}</strong><span>Einheiten · 28 Tage</span></div>
+          <div><strong>{int(sessions_28 or 0)}</strong><span>Einheiten</span></div>
           <div><strong>{_safe(load_text)}</strong><span>Belastung</span></div>
           <div><strong>{active_weeks}/4</strong><span>aktive Wochen</span></div>
           <div><strong>{_safe(diversity_text)}</strong><span>Vielfalt</span></div>
@@ -54,38 +66,79 @@ def render_status_dashboard(
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="status-section-title">DAS FÄLLT DEINEM COACH AUF</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="status-section-title">DAS FÄLLT DEINEM COACH AUF</div>',
+        unsafe_allow_html=True,
+    )
     observations: list[str] = []
     for item in positive_observations or []:
         if isinstance(item, dict):
-            observations.append(str(item.get("message") or item.get("title") or "").strip())
+            text = str(item.get("message") or item.get("title") or "").strip()
         else:
-            observations.append(str(item).strip())
-    observations = [x for x in observations if x][:2]
-    if not observations:
-        observations = ["Deine Trainingshistorie wird mit jeder gespeicherten Einheit aussagekräftiger."]
+            text = str(item).strip()
+        if text and text not in observations:
+            observations.append(text)
 
-    finding_html = "".join(
+    observations = observations[:2]
+
+    focus_title = str(weekly_focus.get("title") or "").strip()
+    focus_reason = str(weekly_focus.get("reason") or "").strip()
+    priority = str(weekly_focus.get("priority") or "low").lower()
+    meaningful_focus = _is_meaningful_focus(weekly_focus)
+
+    finding_rows = [
         f'<div class="status-finding"><span class="finding-ok">✓</span><span>{_safe(text)}</span></div>'
         for text in observations
-    )
-    focus_reason = str(weekly_focus.get("reason") or "").strip()
-    if focus_reason:
-        finding_html += f'<div class="status-finding"><span class="finding-note">!</span><span>{_safe(focus_reason)}</span></div>'
-    st.markdown(f'<div class="status-card">{finding_html}</div>', unsafe_allow_html=True)
+    ]
 
-    focus_title = weekly_focus.get("title") or "Aktuell keine gezielte Ergänzung nötig"
-    priority = str(weekly_focus.get("priority") or "low").lower()
-    priority_label = {"high": "Hohe Priorität", "medium": "Mittlere Priorität", "low": "Optional"}.get(priority, "Optional")
+    # Die priorisierte Lücke wird bereits als Coach-Beobachtung sichtbar.
+    # Dadurch folgt die Übersicht der Logik: Daten -> Beobachtung -> Konsequenz.
+    if meaningful_focus and focus_reason:
+        finding_rows.append(
+            f'<div class="status-finding"><span class="finding-note">!</span><span>{_safe(focus_reason)}</span></div>'
+        )
+
+    if not finding_rows:
+        finding_rows.append(
+            '<div class="status-finding"><span class="finding-ok">✓</span>'
+            '<span>Mit weiteren gespeicherten Einheiten werden die Coach-Beobachtungen belastbarer.</span></div>'
+        )
+
     st.markdown(
-        f'''<div class="status-card status-supplement-card">
-        <div class="status-card-heading">SINNVOLLE ERGÄNZUNG</div>
-        <div class="supplement-row"><div><div class="supplement-title">{_safe(focus_title)}</div>
-        <div class="supplement-reason">{_safe(focus_reason, "Dein aktuelles Training zeigt keine dringende Lücke.")}</div></div>
-        <span class="priority-pill">{_safe(priority_label)}</span></div></div>''',
+        f'<div class="status-card">{"".join(finding_rows[:3])}</div>',
         unsafe_allow_html=True,
     )
-    st.button("Ergänzungen ansehen", key="status_show_supplements", width="stretch")
+
+    st.markdown(
+        '<div class="status-section-title">DESHALB SINNVOLL</div>',
+        unsafe_allow_html=True,
+    )
+    if meaningful_focus:
+        priority_label = {"high": "Hohe Priorität", "medium": "Mittlere Priorität"}.get(
+            priority, "Priorisiert"
+        )
+        st.markdown(
+            f'''<div class="status-card status-supplement-card">
+            <div class="supplement-row"><div>
+            <div class="supplement-title">{_safe(focus_title)}</div>
+            <div class="supplement-reason">{_safe(focus_reason)}</div></div>
+            <span class="priority-pill">{_safe(priority_label)}</span></div></div>''',
+            unsafe_allow_html=True,
+        )
+        with st.expander("Warum ist das sinnvoll?", expanded=False):
+            st.write(focus_reason)
+            st.caption(
+                "Der Hinweis wird aus deiner bisherigen Trainingsverteilung abgeleitet. "
+                "Er ist eine mögliche Ergänzung zu deinem bestehenden Training und kein Trainingsplan."
+            )
+    else:
+        st.markdown(
+            '''<div class="status-card status-supplement-card">
+            <div class="supplement-title">Aktuell keine klare Trainingslücke</div>
+            <div class="supplement-reason">Aus den bisherigen Daten ergibt sich derzeit keine Ergänzung, die dein Coach klar priorisieren würde.</div>
+            </div>''',
+            unsafe_allow_html=True,
+        )
 
     st.markdown(
         f'''<div class="status-card status-latest-card"><div>
@@ -95,9 +148,12 @@ def render_status_dashboard(
         <div class="latest-arrow">›</div></div>''',
         unsafe_allow_html=True,
     )
-    st.button("Coach-Analyse ansehen", key="status_show_latest_analysis", width="stretch")
+    st.caption("Die vollständigen Workout-Details findest du unter „Training“.")
 
-    st.markdown('<div class="status-section-title">DEINE ENTWICKLUNG · LETZTE 28 TAGE</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="status-section-title">DEINE ENTWICKLUNG · 28 TAGE</div>',
+        unsafe_allow_html=True,
+    )
     trend_analysis = trend_analysis or {}
     recent_sessions = recent_sessions or []
     load_data = trend_analysis.get("load", {}) or {}
@@ -118,18 +174,14 @@ def render_status_dashboard(
     c3.metric("Vielfalt", str(diversity_text))
 
     if recent_sessions:
-        st.caption("Letzte 14 Tage im Vergleich zu den vorherigen 14 Tagen")
-        trend_lines = []
+        trend_lines: list[str] = []
         if frequency_data.get("text"):
             trend_lines.append(str(frequency_data["text"]))
         if rpe_data.get("text"):
             trend_lines.append(str(rpe_data["text"]))
-        for item in (trend_analysis.get("movement_patterns", []) or [])[:2]:
-            text = str(item.get("text") or "").strip()
-            symbol = str(item.get("symbol") or "•")
-            if text:
-                trend_lines.append(f"{symbol} {text}")
         if trend_lines:
-            st.markdown("  ".join(f"- {line}" for line in trend_lines))
+            st.caption(" · ".join(trend_lines[:2]))
     else:
-        st.caption("Sobald Trainings gespeichert sind, erscheinen hier belastbare 28-Tage-Trends.")
+        st.caption(
+            "Sobald Trainings gespeichert sind, erscheinen hier belastbare 28-Tage-Trends."
+        )

@@ -7,6 +7,14 @@ sportwissenschaftlich zu interpretieren.
 
 from __future__ import annotations
 
+# Konsolen-Debugausgaben sind standardmäßig deaktiviert.
+# Bei Bedarf für lokale Fehlersuche temporär auf True setzen.
+DEBUG_CONSOLE_OUTPUT = False
+
+def _debug__debug_print(*args, **kwargs) -> None:
+    if DEBUG_CONSOLE_OUTPUT:
+        print(*args, **kwargs)
+
 from dataclasses import asdict
 import json
 
@@ -53,9 +61,9 @@ def interpret_with_mistral(
         f"{json.dumps(deterministic_analysis.to_dict(), indent=2)}"
     )
 
-    print("===== INTERPRETER PROMPT =====")
-    print(prompt)
-    print("==============================")
+    #_debug_print("===== INTERPRETER PROMPT =====")
+    #_debug_print(prompt)
+    #_debug_print("==============================")
 
     response = call_mistral(
         api_key=api_key,
@@ -63,9 +71,9 @@ def interpret_with_mistral(
         content=prompt,
     )
 
-    print("===== INTERPRETER RESPONSE =====")
-    print(repr(response))
-    print("================================")
+    #_debug_print("===== INTERPRETER RESPONSE =====")
+    #_debug_print(repr(response))
+    #_debug_print("================================")
 
     response = remove_markdown_code_fence(
         response
@@ -78,21 +86,21 @@ def interpret_with_mistral(
 
     except json.JSONDecodeError as exc:
 
-        print(
-            "===== INTERPRETER JSON FEHLER ====="
-        )
-        print(
-            f"{exc.msg} | "
-            f"Zeile {exc.lineno}, "
-            f"Spalte {exc.colno}, "
-            f"Position {exc.pos}"
-        )
-        print(
-            "Starte einen JSON-Reparaturversuch."
-        )
-        print(
-            "==================================="
-        )
+        #_debug_print(
+        #    "===== INTERPRETER JSON FEHLER ====="
+        #)
+        #_debug_print(
+        #    f"{exc.msg} | "
+        #    f"Zeile {exc.lineno}, "
+        #    f"Spalte {exc.colno}, "
+        #    f"Position {exc.pos}"
+        #)
+        #_debug_print(
+        #    "Starte einen JSON-Reparaturversuch."
+        #)
+        #_debug_print(
+        #    "==================================="
+        #)
 
         response_json = _repair_json_response(
             broken_response=response,
@@ -109,9 +117,9 @@ def interpret_with_mistral(
             "ein JSON-Objekt sein."
         )
 
-    print("===== INTERPRETER JSON =====")
-    print(response_json)
-    print("============================")
+    #_debug_print("===== INTERPRETER JSON =====")
+    #_debug_print(response_json)
+    #_debug_print("============================")
 
     return _build_workout_interpretation(
         response_json
@@ -158,15 +166,15 @@ def _repair_json_response(
         content=repair_prompt,
     )
 
-    print(
-        "===== INTERPRETER REPAIR RESPONSE ====="
-    )
-    print(
-        repr(repaired_response)
-    )
-    print(
-        "======================================="
-    )
+    #_debug_print(
+    #    "===== INTERPRETER REPAIR RESPONSE ====="
+    #)
+    #_debug_print(
+    #    repr(repaired_response)
+    #)
+    #_debug_print(
+    #    "======================================="
+    #)
 
     repaired_response = (
         remove_markdown_code_fence(
