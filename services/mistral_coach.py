@@ -11,13 +11,6 @@ from __future__ import annotations
 
 import json
 
-from models.parsed_workout import ParsedWorkout
-from models.deterministic_analysis import (
-    DeterministicAnalysis,
-)
-from models.workout_interpretation import (
-    WorkoutInterpretation,
-)
 from models.training_analysis import (
     TrainingAnalysis,
 )
@@ -34,9 +27,6 @@ from services.mistral_service import (
 
 def build_coach_with_mistral(
     *,
-    parsed_workout: ParsedWorkout,
-    deterministic_analysis: DeterministicAnalysis,
-    workout_interpretation: WorkoutInterpretation,
     training_analysis: TrainingAnalysis,
     readiness: dict,
     weekly_focus: dict,
@@ -44,10 +34,7 @@ def build_coach_with_mistral(
     history_summary: dict,
     sportart: str,
     level: str,
-    workout_rpe: int | None,
-    duration_minutes: int | None,
     injuries: str | None,
-    comment: str | None,
     api_key: str,
     model: str,
 ) -> str:
@@ -59,46 +46,14 @@ def build_coach_with_mistral(
 {COACH_PROMPT}
 
 SPORTART
-
 {sportart}
 
 LEVEL
-
 {level}
 
-WORKOUT RPE
-
-{workout_rpe}
-
-TRAININGSDAUER
-
-{duration_minutes}
-
 BESCHWERDEN
-
 {injuries or "Keine"}
 
-KOMMENTAR
-
-{comment or "Keiner"}
-
-----------------------------------------
-
-PARSED WORKOUT
-
-{json.dumps(parsed_workout.to_dict(), ensure_ascii=False, indent=2)}
-
-----------------------------------------
-
-DETERMINISTIC ANALYSIS
-
-{json.dumps(deterministic_analysis.to_dict(), ensure_ascii=False, indent=2)}
-
-----------------------------------------
-
-WORKOUT INTERPRETATION
-
-{json.dumps(workout_interpretation.to_dict(), ensure_ascii=False, indent=2)}
 
 ----------------------------------------
 
@@ -161,23 +116,12 @@ def build_daily_coach_tips(
 {DAILY_COACH_TIPS_PROMPT}
 
 SPORTART
-
 {sportart}
 
 LEVEL
-
 {level}
 
-WORKOUT RPE
-
-{workout_rpe}
-
-TRAININGSDAUER
-
-{duration_minutes}
-
 BESCHWERDEN
-
 {injuries or "Keine"}
 
 ---

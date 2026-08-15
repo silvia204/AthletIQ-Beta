@@ -33,10 +33,14 @@ def analyze_weekly_focus(
 
     if readiness_status == "low":
         return {
-            "title": "Belastung reduzieren",
-            "reason": (
-                "Mehrere Überlastungssignale wurden erkannt."
+            "title": "Belastung vorübergehend reduzieren",
+            "text": (
+                "Wenn innerhalb der nächsten 24–48 Stunden Training geplant ist, "
+                "reduziere Intensität oder Umfang deutlich oder ersetze die Einheit "
+                "durch aktive Regeneration. Liegt dein nächstes Training später, "
+                "beurteile deine Belastbarkeit zu diesem Zeitpunkt erneut."
             ),
+            "reason": "readiness_low",
             "priority": "high",
         }
 

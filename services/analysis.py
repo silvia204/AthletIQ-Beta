@@ -58,9 +58,9 @@ def analyze_workout(
 
    # _debug_print("1 - starte deterministische Analyse")
 
-    #deterministic_analysis = derive_deterministic_analysis(
-    #    parsed_workout=parsed_workout,
-    #)
+    deterministic_analysis = derive_deterministic_analysis(
+        parsed_workout=parsed_workout,
+    )
 
     #-_debug_print("2 - deterministische Analyse fertig")
 

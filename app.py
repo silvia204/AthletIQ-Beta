@@ -10,6 +10,10 @@ from streamlit_gsheets import GSheetsConnection
 
 from services.analysis import analyze_workout
 from services.history_analysis import analyze_history
+from services.history_normalization import (
+    normalize_movement_patterns,
+    normalize_muscle_groups,
+)
 from services.parser import parse_workout
 from services.trends import build_trends
 from services.training_balance import build_training_balance
@@ -1982,80 +1986,8 @@ with tab2:
             primary_goal=user_sport,
         )
 
-        # with st.expander(
-        #     "🔧 Technische Analyse-Eingabedaten",
-        #     expanded=False,
-        # ):
-        #     st.write(
-        #         "Historieneinträge:",
-        #         len(training_history),
-        #     )
-
-        #     st.write(
-        #         "Anzahl Einheiten:",
-        #         history_summary.get(
-        #             "anzahl_einheiten"
-        #         ),
-        #     )
-
-        #     st.write(
-        #         "Windows:",
-        #     )
-        #     st.json(
-        #         history_summary.get(
-        #             "windows",
-        #             {},
-        #         )
-        #     )
-
-        #     st.write(
-        #         "Days since last load:",
-        #     )
-        #     st.json(
-        #         history_summary.get(
-        #             "days_since_last_load",
-        #             {},
-        #         )
-        #     )
-
-        #     st.write(
-        #         "Overload signals:",
-        #     )
-        #     st.json(
-        #         history_summary.get(
-        #             "overload_signals",
-        #             [],
-        #         )
-        #     )
-
-        #     st.write(
-        #         "Undertraining signals:",
-        #     )
-        #     st.json(
-        #         history_summary.get(
-        #             "undertraining_signals",
-        #             [],
-        #         )
-        #     )
-
-        #     st.write(
-        #         "Trend Analysis:",
-        #     )
-        #     st.json(
-        #         trend_analysis
-        #     )
-
-        #     st.write(
-        #         "Training Balance:",
-        #     )
-        #     st.json(
-        #         training_balance
-        #     )
-
         training_analysis = analyze_history(
             history_summary=history_summary,
-            deterministic_analysis=deterministic_analysis,
-            workout_interpretation=workout_interpretation,
         )
 
         st.session_state[
@@ -2081,23 +2013,14 @@ with tab2:
                 "name": user_name,
                 "sportart": user_sport,
                 "level": user_level,
-                "duration_minutes": duration_minutes,
-                "rpe": user_rpe,
-                "score": total_score,
                 "injuries": user_injuries,
-                "comment": user_comment,
-                "workout": current_workout_text,
                 "history_summary": history_summary,
                 "training_analysis": training_analysis,
                 "readiness": readiness,
                 "weekly_focus": weekly_focus,
+                "positive_observations": positive_observations,
             }
         )
-
-        if st.session_state.get("coach_context_source") == "history_cached":
-            # Gespeichertes Coach-Feedback verwenden; kein neuer Mistral-Aufruf
-            # bei Athletenwahl, Tabwechsel oder Details-Toggles.
-            st.session_state["letzter_state_key"] = coach_state_key
 
         if (
             st.session_state.get("letzter_state_key")
@@ -2112,11 +2035,10 @@ with tab2:
                 # AUSFÜHRLICHE COACH-EINORDNUNG
                 # --------------------------------------------
 
+                print("\n>>> APP DEBUG: build_coach_feedback WIRD JETZT AUFGERUFEN <<<\n")
+
                 try:
                     coach_text = build_coach_feedback(
-                        parsed_workout=parsed_workout,
-                        deterministic_analysis=deterministic_analysis,
-                        workout_interpretation=workout_interpretation,
                         training_analysis=training_analysis,
                         readiness=readiness,
                         weekly_focus=weekly_focus,
@@ -2124,10 +2046,7 @@ with tab2:
                         history_summary=history_summary,
                         sportart=user_sport,
                         level=user_level,
-                        workout_rpe=user_rpe,
-                        duration_minutes=duration_minutes,
                         injuries=user_injuries,
-                        comment=user_comment,
                         api_key=MISTRAL_API_KEY,
                         model=MISTRAL_TEXT_MODEL,
                     )
@@ -2290,10 +2209,14 @@ with tab2:
                             "kommentar": user_comment,
                             "coach_feedback": str(coach_display_text).strip(),
                             "bewegungsmuster_json": json_dumps_for_sheet(
-                                deterministic_analysis.bewegungsmuster
+                                normalize_movement_patterns(
+                                    deterministic_analysis.bewegungsmuster
+                                )
                             ),
                             "muskelgruppen_json": json_dumps_for_sheet(
-                                deterministic_analysis.muskelgruppen
+                                normalize_muscle_groups(
+                                    deterministic_analysis.muskelgruppen
+                                )
                             ),
                             "trainingsziele_json": json_dumps_for_sheet(
                                 workout_interpretation.trainingsziele

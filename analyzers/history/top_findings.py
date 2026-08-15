@@ -6,7 +6,6 @@ Fasst die wichtigsten Erkenntnisse der Trainingshistorie zusammen.
 
 from __future__ import annotations
 
-
 def analyze_top_findings(
     *,
     readiness: dict,
@@ -14,7 +13,6 @@ def analyze_top_findings(
     trends: dict,
     overview: dict,
     movement_coverage: dict,
-    workout_interpretation,
 ) -> list[dict]:
     """
     Erstellt eine priorisierte Liste der wichtigsten

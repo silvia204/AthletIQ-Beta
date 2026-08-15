@@ -29,9 +29,6 @@ from services.mistral_coach import (
 
 def build_coach_feedback(
     *,
-    parsed_workout: ParsedWorkout,
-    deterministic_analysis: DeterministicAnalysis,
-    workout_interpretation: WorkoutInterpretation,
     training_analysis: TrainingAnalysis,
     readiness: dict,
     weekly_focus: dict,
@@ -39,10 +36,7 @@ def build_coach_feedback(
     history_summary: dict,
     sportart: str,
     level: str,
-    workout_rpe: int | None,
-    duration_minutes: int | None,
     injuries: str | None,
-    comment: str | None,
     api_key: str,
     model: str,
 ) -> str:
@@ -51,9 +45,6 @@ def build_coach_feedback(
     """
 
     return build_coach_with_mistral(
-        parsed_workout=parsed_workout,
-        deterministic_analysis=deterministic_analysis,
-        workout_interpretation=workout_interpretation,
         training_analysis=training_analysis,
         readiness=readiness,
         weekly_focus=weekly_focus,
@@ -61,10 +52,7 @@ def build_coach_feedback(
         history_summary=history_summary,
         sportart=sportart,
         level=level,
-        workout_rpe=workout_rpe,
-        duration_minutes=duration_minutes,
         injuries=injuries,
-        comment=comment,
         api_key=api_key,
         model=model,
     )

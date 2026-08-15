@@ -6,14 +6,8 @@ Orchestriert die regelbasierte Analyse der Trainingshistorie.
 
 from __future__ import annotations
 
-from models.deterministic_analysis import (
-    DeterministicAnalysis,
-)
 from models.training_analysis import (
     TrainingAnalysis,
-)
-from models.workout_interpretation import (
-    WorkoutInterpretation,
 )
 
 from analyzers.history.readiness import (
@@ -48,12 +42,9 @@ from analyzers.history.overview import (
 def analyze_history(
     *,
     history_summary: dict,
-    deterministic_analysis: DeterministicAnalysis,
-    workout_interpretation: WorkoutInterpretation,
 ) -> TrainingAnalysis:
     """
-    Analysiert die Trainingshistorie und kombiniert
-    sie mit dem aktuellen Workout.
+    Analysiert ausschließlich die gespeicherte Trainingshistorie.
     """
 
     readiness = analyze_readiness(
@@ -91,7 +82,6 @@ def analyze_history(
         trends=trends,
         overview=overview,
         movement_coverage=movement_coverage,
-        workout_interpretation=workout_interpretation,
     )
 
     return TrainingAnalysis(
