@@ -1,24 +1,16 @@
 """
 coach.py
 
-Erstellt das finale Coach-Feedback.
-
-Der Coach analysiert keine Workouts.
-Er formuliert ausschließlich Coaching auf Basis
-bereits berechneter Daten.
+Erstellt das finale Coach-Feedback auf Basis bereits berechneter
+History-Analysen.
 """
 
 from __future__ import annotations
 
-from models.parsed_workout import ParsedWorkout
-from models.deterministic_analysis import (
-    DeterministicAnalysis,
-)
-from models.workout_interpretation import (
-    WorkoutInterpretation,
-)
-from models.training_analysis import (
-    TrainingAnalysis,
+from models.training_analysis import TrainingAnalysis
+
+from services.coach_context import (
+    build_history_coach_context,
 )
 
 from services.mistral_coach import (
@@ -32,24 +24,32 @@ def build_coach_feedback(
     training_analysis: TrainingAnalysis,
     readiness: dict,
     weekly_focus: dict,
-    positive_observations: list[str],
+    positive_observations: list[dict],
     history_summary: dict,
     sportart: str,
     level: str,
     injuries: str | None,
     api_key: str,
     model: str,
-) -> str:
+) -> dict[str, str]:
     """
-    Erstellt das finale Coach-Feedback.
+    Erstellt das History-Coach-Feedback.
+
+    history_summary wird nur lokal zur deterministischen Ableitung
+    von Recency/Trainingsrhythmus verwendet. Die vollständige
+    history_summary wird nicht an Mistral weitergereicht.
     """
 
-    return build_coach_with_mistral(
+    coach_context = build_history_coach_context(
         training_analysis=training_analysis,
         readiness=readiness,
         weekly_focus=weekly_focus,
         positive_observations=positive_observations,
         history_summary=history_summary,
+    )
+
+    return build_coach_with_mistral(
+        coach_context=coach_context,
         sportart=sportart,
         level=level,
         injuries=injuries,
@@ -72,11 +72,6 @@ def build_daily_tips(
     api_key: str,
     model: str,
 ) -> dict[str, str]:
-    """
-    Erstellt die drei kompakten Daily-Coach-Tipps
-    für Training, Ernährung und Recovery.
-    """
-
     return build_daily_coach_tips(
         readiness=readiness,
         weekly_focus=weekly_focus,
@@ -84,8 +79,6 @@ def build_daily_tips(
         history_summary=history_summary,
         sportart=sportart,
         level=level,
-        workout_rpe=workout_rpe,
-        duration_minutes=duration_minutes,
         injuries=injuries,
         api_key=api_key,
         model=model,

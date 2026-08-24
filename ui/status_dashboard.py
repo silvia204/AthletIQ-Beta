@@ -21,16 +21,37 @@ def _status_label(readiness: dict[str, Any]) -> tuple[str, str]:
 
 def _is_meaningful_focus(weekly_focus: dict[str, Any]) -> bool:
     title = str(weekly_focus.get("title") or "").strip().casefold()
-    reason = str(weekly_focus.get("reason") or "").strip()
-    priority = str(weekly_focus.get("priority") or "low").strip().casefold()
+    text = str(
+        weekly_focus.get("text")
+        or weekly_focus.get("reason")
+        or ""
+    ).strip()
+    mode = str(weekly_focus.get("mode") or "").strip().casefold()
+
     generic_titles = {
         "",
         "training fortsetzen",
         "bestehenden plan beibehalten",
         "plan beibehalten",
         "unterrepräsentierte bereiche trainieren",
+        "bestehenden rhythmus unterstützen",
+        "programming ausgewogen umsetzen",
+        "programming zielgerichtet ergänzen",
+        "laufplan unterstützen",
     }
-    return bool(reason and title not in generic_titles and priority in {"high", "medium"})
+
+    meaningful_modes = {
+        "missing_component",
+        "load_adjustment",
+        "small_add_on",
+        "crossfit",
+    }
+
+    return bool(
+        text
+        and title not in generic_titles
+        and mode in meaningful_modes
+    )
 
 
 def render_status_dashboard(
@@ -82,8 +103,23 @@ def render_status_dashboard(
     observations = observations[:2]
 
     focus_title = str(weekly_focus.get("title") or "").strip()
-    focus_reason = str(weekly_focus.get("reason") or "").strip()
-    priority = str(weekly_focus.get("priority") or "low").lower()
+
+    focus_reason = str(
+        weekly_focus.get("text")
+        or weekly_focus.get("reason")
+        or ""
+    ).strip()
+
+    focus_mode = str(
+        weekly_focus.get("mode")
+        or ""
+    ).strip().casefold()
+
+    focus_session = str(weekly_focus.get("session") or "").strip()
+    focus_recommendation_reason = str(
+        weekly_focus.get("recommendation_reason") or ""
+    ).strip()
+
     meaningful_focus = _is_meaningful_focus(weekly_focus)
 
     finding_rows = [
@@ -114,28 +150,51 @@ def render_status_dashboard(
         unsafe_allow_html=True,
     )
     if meaningful_focus:
-        priority_label = {"high": "Hohe Priorität", "medium": "Mittlere Priorität"}.get(
-            priority, "Priorisiert"
+        mode_label = {
+            "missing_component": "Mögliche Ergänzung",
+            "load_adjustment": "Belastung anpassen",
+            "small_add_on": "Optionale Ergänzung",
+            "crossfit": "CrossFit-Ergänzung",
+        }.get(
+            focus_mode,
+            "Mögliche Ergänzung",
         )
-        st.markdown(
-            f'''<div class="status-card status-supplement-card">
-            <div class="supplement-row"><div>
-            <div class="supplement-title">{_safe(focus_title)}</div>
-            <div class="supplement-reason">{_safe(focus_reason)}</div></div>
-            <span class="priority-pill">{_safe(priority_label)}</span></div></div>''',
-            unsafe_allow_html=True,
+
+        recommendation_html = (
+            '<div class="supplement-session"><strong>Konkreter Vorschlag:</strong> '
+            + _safe(focus_session)
+            + '</div>'
+            if focus_session
+            else ""
         )
+        explanation = focus_recommendation_reason or focus_reason
+
+        card_html = (
+            '<div class="status-card status-supplement-card">'
+            '<div class="supplement-row"><div>'
+            '<div class="supplement-title">' + _safe(focus_title) + '</div>'
+            + recommendation_html
+            + '<div class="supplement-reason">' + _safe(explanation) + '</div></div>'
+            '<span class="priority-pill">' + _safe(mode_label) + '</span></div></div>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
+
         with st.expander("Warum ist das sinnvoll?", expanded=False):
-            st.write(focus_reason)
+            st.write(explanation)
             st.caption(
-                "Der Hinweis wird aus deiner bisherigen Trainingsverteilung abgeleitet. "
-                "Er ist eine mögliche Ergänzung zu deinem bestehenden Training und kein Trainingsplan."
+                "Der Vorschlag wird aus deiner bisherigen Trainingsverteilung "
+                "und der priorisierten Ergänzung abgeleitet. Er ergänzt deinen "
+                "bestehenden Plan und ersetzt keine vollständige Trainingsplanung."
             )
+
     else:
         st.markdown(
             '''<div class="status-card status-supplement-card">
             <div class="supplement-title">Aktuell keine klare Trainingslücke</div>
-            <div class="supplement-reason">Aus den bisherigen Daten ergibt sich derzeit keine Ergänzung, die dein Coach klar priorisieren würde.</div>
+            <div class="supplement-reason">
+            Aus den bisherigen Daten ergibt sich derzeit keine einzelne Ergänzung,
+            die gegenüber deinem bestehenden Training klar priorisiert werden sollte.
+            </div>
             </div>''',
             unsafe_allow_html=True,
         )

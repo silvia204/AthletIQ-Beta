@@ -163,7 +163,8 @@ def build_weekly_focus(
     """Return one supporting priority, never a weekly training plan."""
     findings = _findings(training_analysis)
     crossfit_focus = build_crossfit_focus(
-        history_summary=history_summary
+        history_summary=history_summary,
+        training_analysis=training_analysis,
     )
 
     if crossfit_focus is not None:
@@ -246,10 +247,15 @@ def build_positive_observations(
     sessions_28 = int(_num(w28.get("sessions")))
     positives: list[str] = []
 
-    if sessions_28 >= 8:
-        positives.append(f"Starke Trainingskontinuität mit {sessions_28} Einheiten in den letzten 28 Tagen.")
-    elif sessions_28 >= 4:
-        positives.append(f"Solide Trainingsroutine mit {sessions_28} Einheiten in den letzten 28 Tagen.")
+    if sessions_28 >= 8 and sessions_7 > 0:
+        positives.append(f"Regelmäßiges Training mit {sessions_28} Einheiten in den letzten 28 Tagen.")
+    elif sessions_28 >= 4 and sessions_7 > 0:
+        positives.append(f"In den letzten 28 Tagen wurden {sessions_28} Einheiten dokumentiert.")
+    elif sessions_28 >= 4 and sessions_7 == 0:
+        positives.append(
+            f"In den letzten 28 Tagen wurden {sessions_28} Einheiten dokumentiert; "
+            "in den letzten 7 Tagen jedoch keine."
+        )
 
     if sum(_num(v) > 0 for v in (w28.get("training_goal_counts", {}) or {}).values()) >= 4:
         positives.append("Dein tatsächlich absolviertes Training deckt mehrere Trainingsziele ab.")
@@ -268,73 +274,86 @@ def build_positive_observations(
 def build_crossfit_focus(
     *,
     history_summary: dict[str, Any],
+    training_analysis: TrainingAnalysis,
 ) -> dict[str, str] | None:
-    """
-    Erstellt einen sportartspezifischen CrossFit-Hinweis
-    auf Basis der Movement-Coverage.
-    """
-
-    coverage = history_summary.get(
-        "crossfit_coverage",
-        {}
-    )
-
-    missing = history_summary.get(
-        "missing_crossfit_movements",
-        []
-    )
+    """Erstellt eine einzelne datenbasierte CrossFit-Ergänzung."""
+    coverage = history_summary.get("crossfit_coverage", {})
+    missing = history_summary.get("missing_crossfit_movements", [])
 
     if not coverage:
         return None
 
-    percentage = float(
-        coverage.get(
-            "coverage_percent",
-            100.0,
-        )
-    )
-
-    athlete_level = coverage.get(
-        "athlete_level",
-        "scaled",
-    )
+    percentage = float(coverage.get("coverage_percent", 100.0))
+    athlete_level = str(coverage.get("athlete_level", "scaled"))
 
     if percentage >= 90:
         return {
             "title": "Sehr ausgewogene CrossFit-Abdeckung",
-            "text": (
-                "Nahezu alle für dein Level relevanten "
-                "Movement Families wurden in den letzten "
-                "Wochen trainiert."
-            ),
-            "session": (
-                "Keine gezielte Ergänzung notwendig."
-            ),
+            "text": "Nahezu alle für dein Level relevanten Movement Families wurden in den letzten Wochen trainiert.",
+            "session": "Keine gezielte Ergänzung notwendig.",
+            "recommendation_reason": "Aus der aktuellen Movement-Coverage ergibt sich keine einzelne CrossFit-Ergänzung mit klarer Priorität.",
             "mode": "balanced",
         }
 
-    if missing:
+    if not missing:
+        return None
 
-        movement = (
-            missing[0]
-            .replace("_", " ")
-            .title()
-        )
+    movement_key = str(missing[0]).strip().casefold()
+    movement = str(missing[0]).replace("_", " ").title()
+    windows = (training_analysis.trends or {}).get("windows", {}) or {}
+    w28 = windows.get("28_days", {}) or {}
+    goals = w28.get("training_goal_counts", {}) or {}
+    aerobic_base = _num(goals.get("aerobic_base"))
+    threshold = _num(goals.get("threshold"))
+
+    observation = f"Für dein {athlete_level.title()}-Level fehlt aktuell '{movement}'."
+
+    if movement_key in {"bike", "row", "ski", "ski_erg", "skierg"}:
+        if aerobic_base <= 0:
+            return {
+                "title": f"{movement} locker ergänzen",
+                "text": observation,
+                "session": f"25–35 Min. {movement} in Zone 2 bei ruhigem, gleichmäßigem Tempo.",
+                "recommendation_reason": (
+                    f"{movement} fehlt aktuell in deiner CrossFit-Abdeckung. Gleichzeitig ist "
+                    "aerobic_base in den letzten 28 Tagen nicht dokumentiert. "
+                    "Ein lockerer aerober Reiz verbindet beide Beobachtungen."
+                ),
+                "mode": "crossfit",
+            }
+
+        if threshold <= 0:
+            return {
+                "title": f"{movement} mit kontrollierten Intervallen ergänzen",
+                "text": observation,
+                "session": f"3 × 6 Min. {movement} zügig und kontrolliert mit jeweils 2 Min. locker dazwischen.",
+                "recommendation_reason": (
+                    f"{movement} fehlt aktuell in deiner CrossFit-Abdeckung. Gleichzeitig ist "
+                    "threshold in den letzten 28 Tagen nicht dokumentiert. Deshalb passt hier "
+                    "eher ein kontrollierter Intervallreiz als zusätzliche lockere Grundlagenausdauer."
+                ),
+                "mode": "crossfit",
+            }
 
         return {
-            "title": (
-                "Fehlendes CrossFit-Movement"
-            ),
-            "text": (
-                f"Für dein {athlete_level.title()}-Level "
-                f"fehlt aktuell '{movement}'."
-            ),
-            "session": (
-                "Wenn dein Programming es zulässt, "
-                "ergänze in einer der nächsten Wochen "
-                "einen Technikblock."
+            "title": f"{movement} als CrossFit-Ergänzung",
+            "text": observation,
+            "session": f"Optional 15–20 Min. lockeres {movement}, wenn dein bestehendes Programming dafür Spielraum lässt.",
+            "recommendation_reason": (
+                f"{movement} fehlt in der aktuellen CrossFit-Movement-Coverage. Aus den erfassten "
+                "Trainingszielen ergibt sich aber kein klar unterrepräsentierter Ausdauerreiz; "
+                "deshalb bleibt die Ergänzung bewusst klein und optional."
             ),
             "mode": "crossfit",
         }
 
-    return None
+    return {
+        "title": f"{movement} im Blick behalten",
+        "text": observation,
+        "session": f"Wenn dein bestehendes Programming es zulässt, kann {movement} gezielt als kleine Ergänzung aufgenommen werden.",
+        "recommendation_reason": (
+            f"{movement} fehlt aktuell in der für dein Level erfassten CrossFit-Movement-Coverage. "
+            "Aus dieser Information allein lässt sich keine konkrete Belastungsform oder Dosierung ableiten."
+        ),
+        "mode": "crossfit",
+    }

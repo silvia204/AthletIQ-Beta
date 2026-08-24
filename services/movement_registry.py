@@ -488,7 +488,7 @@ register(
             MuscleGroup.SHOULDERS,
             MuscleGroup.GLUTES,
         ),
-
+        is_crossfit_movement=True,
         notes="Olympic lift consisting of a clean followed by a jerk.",
     )
 )

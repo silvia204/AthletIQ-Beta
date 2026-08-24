@@ -9,6 +9,20 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 
 from services.analysis import analyze_workout
+from services.coach_logic import (
+    build_positive_observations,
+    build_readiness_summary,
+    build_weekly_focus,
+)
+from services.coach import (
+    build_coach_feedback,
+    build_daily_tips,
+)
+from services.date_utils import (
+    normalize_training_dates,
+    format_training_dates,
+    sort_training_history,
+)
 from services.history_analysis import analyze_history
 from services.history_normalization import (
     normalize_movement_patterns,
@@ -18,16 +32,7 @@ from services.parser import parse_workout
 from services.trends import build_trends
 from services.training_balance import build_training_balance
 
-from services.coach import (
-    build_coach_feedback,
-    build_daily_tips,
-)
 
-from services.date_utils import (
-    normalize_training_dates,
-    format_training_dates,
-    sort_training_history,
-)
 from ui.coach_dashboard import render_coach_dashboard
 from ui.status_dashboard import render_status_dashboard
 
@@ -1413,10 +1418,35 @@ with tab0:
         history_summary = build_history_summary(status_history, period_days=28)
         trend_analysis = build_trends(status_history)
 
-        cached_analysis = st.session_state.get("letzte_trainingsanalyse")
-        cached_readiness = getattr(cached_analysis, "readiness", {}) if cached_analysis else {}
-        cached_positive = getattr(cached_analysis, "positive_observations", []) if cached_analysis else []
-        cached_focus = getattr(cached_analysis, "weekly_focus", {}) if cached_analysis else {}
+        # ------------------------------------------------------------
+        # Coach-Status aus der aktuellen 28-Tage-Historie ableiten
+        # ------------------------------------------------------------
+
+        status_training_analysis = analyze_history(
+            history_summary=history_summary,
+        )
+
+        status_training_balance = build_training_balance(
+            trend_analysis,
+            primary_goal=sportart,
+        )
+
+        status_readiness = build_readiness_summary(
+            history_summary=history_summary,
+            training_analysis=status_training_analysis,
+        )
+
+        status_positive = build_positive_observations(
+            history_summary=history_summary,
+            training_analysis=status_training_analysis,
+        )
+
+        status_focus = build_weekly_focus(
+            history_summary=history_summary,
+            training_analysis=status_training_analysis,
+            primary_goal=sportart,
+            training_balance=status_training_balance,
+        )
 
         recent_sessions = history_summary.get("letzte_einheiten", []) or []
         latest_session = recent_sessions[-1] if recent_sessions else {}
@@ -1438,11 +1468,11 @@ with tab0:
 
         if not st.session_state.get("workout_entry_requested", False):
             render_status_dashboard(
-                    user_name=user_name,
+                user_name=user_name,
                 sessions_28=int(history_summary.get("anzahl_einheiten", 0) or 0),
-                readiness=cached_readiness,
-                positive_observations=cached_positive,
-                weekly_focus=cached_focus,
+                readiness=status_readiness,
+                positive_observations=status_positive,
+                weekly_focus=status_focus,
                 load_trend=trend_analysis.get("load", {}),
                 consistency=trend_analysis.get("consistency", {}),
                 diversity=trend_analysis.get("diversity", {}),
@@ -2031,14 +2061,18 @@ with tab2:
                 "und Trainingshistorie ..."
             ):
 
+
                 # --------------------------------------------
                 # AUSFÜHRLICHE COACH-EINORDNUNG
                 # --------------------------------------------
 
-                print("\n>>> APP DEBUG: build_coach_feedback WIRD JETZT AUFGERUFEN <<<\n")
+                print(
+                    "\n>>> APP DEBUG: "
+                    "build_coach_feedback WIRD JETZT AUFGERUFEN <<<\n"
+                )
 
                 try:
-                    coach_text = build_coach_feedback(
+                    coach_result = build_coach_feedback(
                         training_analysis=training_analysis,
                         readiness=readiness,
                         weekly_focus=weekly_focus,
@@ -2051,6 +2085,21 @@ with tab2:
                         model=MISTRAL_TEXT_MODEL,
                     )
 
+                    coach_text = coach_result.get(
+                        "coach_feedback",
+                        "",
+                    )
+
+                    readiness_summary = coach_result.get(
+                        "readiness_summary",
+                        "",
+                    )
+
+                    print("\n" + "=" * 80)
+                    print("READINESS SUMMARY DEBUG")
+                    print(readiness_summary)
+                    print("=" * 80 + "\n")
+
                 except RuntimeError as exc:
                     print(
                         f"Coach-Feedback fehlgeschlagen: {exc}"
@@ -2061,6 +2110,8 @@ with tab2:
                         "kann ich dein Training und seine "
                         "Entwicklung zuverlässiger einordnen."
                     )
+
+                    readiness_summary = ""
 
                 # --------------------------------------------
                 # DAILY COACH TIPS
@@ -2121,6 +2172,10 @@ with tab2:
                     "letzter_state_key"
                 ] = coach_state_key
 
+                st.session_state[
+                    "letzte_readiness_summary"
+                ] = readiness_summary
+
 
         # ----------------------------------------------------
         # COACH-DATEN AUS SESSION STATE
@@ -2133,6 +2188,21 @@ with tab2:
             or (
                 "Noch kein Coach-Feedback verfügbar."
             )
+        )
+
+        coach_text = st.session_state.get(
+            "letzter_coach_text",
+            "",
+        )
+
+        readiness_summary = st.session_state.get(
+            "letzte_readiness_summary",
+            "",
+        )
+
+        daily_coach_tips = st.session_state.get(
+            "letzte_daily_coach_tips",
+            {},
         )
 
         daily_coach_tips = (
