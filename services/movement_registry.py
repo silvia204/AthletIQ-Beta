@@ -980,6 +980,43 @@ register(
     )
 )
 
+register(
+    Movement(
+        movement_id="kettlebell_swing",
+        display_name="Kettlebell Swing",
+        category=MovementCategory.FUNCTIONAL,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            "Kettlebell Swing",
+            "Kettlebell Swings",
+            "Russian Kettlebell Swing",
+            "Russian Kettlebell Swings",
+            "American Kettlebell Swing",
+            "American Kettlebell Swings",
+            "KB Swing",
+            "KB Swings",
+        ),
+        aliases=(
+            "kettlebell swing",
+            "kettlebell swings",
+            "kb swing",
+            "kb swings",
+            "russian kb swing",
+            "american kb swing",
+        ),
+        movement_patterns=(
+            MovementPattern.HINGE,
+        ),
+        muscle_groups=(
+            MuscleGroup.GLUTES,
+            MuscleGroup.HAMSTRINGS,
+            MuscleGroup.CORE,
+        ),
+        is_crossfit_movement=True,
+        notes="Tracks Russian and American kettlebell swing variations.",
+    )
+)
+
 # ============================================================================
 # GYMNASTICS
 # ============================================================================
@@ -1110,6 +1147,8 @@ register(
         category=MovementCategory.GYMNASTICS,
         minimum_level=AthleteLevel.ADVANCED,
         variants=(
+            "Muscle-up",
+            "Muscle-ups",
             "Bar Muscle-up",
             "Bar Muscle-ups",
             "Strict Bar Muscle-up",
@@ -1120,6 +1159,8 @@ register(
             "Strict Ring Muscle-ups",
         ),
         aliases=(
+            "muscle up",
+            "muscle ups",
             "bar muscle up",
             "bar mu",
             "ring muscle up",
@@ -1179,6 +1220,8 @@ register(
         category=MovementCategory.GYMNASTICS,
         minimum_level=AthleteLevel.ADVANCED,
         variants=(
+            "Handstand Push-up",
+            "Handstand Push-ups",
             "Box Handstand Push-up",
             "Box Handstand Push-ups",
             "Strict Handstand Push-up",
@@ -1189,6 +1232,8 @@ register(
             "Deficit Handstand Push-ups",
         ),
         aliases=(
+            "handstand push up",
+            "handstand push ups",
             "hspu",
             "strict hspu",
             "kipping hspu",
@@ -1257,6 +1302,7 @@ register(
         ),
         aliases=(
             "ttb",
+            "T2B",
         ),
         movement_patterns=(
             MovementPattern.VERTICAL_PULL,

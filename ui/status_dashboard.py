@@ -180,11 +180,38 @@ def render_status_dashboard(
         st.markdown(card_html, unsafe_allow_html=True)
 
         with st.expander("Warum ist das sinnvoll?", expanded=False):
-            st.write(explanation)
+            detail_by_mode = {
+                "crossfit": (
+                    "Die Movement-Coverage wird mit deinen dokumentierten Trainingszielen "
+                    "abgeglichen. Eine fehlende Bewegung wird deshalb nicht automatisch zu "
+                    "einer Pflicht-Einheit: Entscheidend ist, ob die übrigen Daten zusätzlich "
+                    "einen passenden Trainingsreiz als unterrepräsentiert zeigen."
+                ),
+                "missing_component": (
+                    "Die Empfehlung priorisiert einen Trainingsbestandteil, der in deiner "
+                    "bisherigen Verteilung vergleichsweise wenig vertreten ist. Sie ist als "
+                    "gezielte Ergänzung gedacht, nicht als Ersatz für dein Programming."
+                ),
+                "load_adjustment": (
+                    "Hier steht nicht ein zusätzliches Training im Vordergrund, sondern die "
+                    "Einordnung deiner bisherigen Belastung. Die Empfehlung soll helfen, den "
+                    "nächsten Reiz passend zur dokumentierten Belastungsverteilung zu wählen."
+                ),
+                "small_add_on": (
+                    "Aus den bisherigen Daten ergibt sich keine große Trainingslücke. Deshalb "
+                    "bleibt der Vorschlag bewusst klein und lässt sich nur dann ergänzen, wenn "
+                    "dein bestehendes Programming dafür Spielraum lässt."
+                ),
+            }
+            st.write(
+                detail_by_mode.get(
+                    focus_mode,
+                    "Der Vorschlag leitet sich aus deiner bisherigen Trainingsverteilung ab "
+                    "und ordnet eine mögliche Ergänzung in dein bestehendes Programming ein.",
+                )
+            )
             st.caption(
-                "Der Vorschlag wird aus deiner bisherigen Trainingsverteilung "
-                "und der priorisierten Ergänzung abgeleitet. Er ergänzt deinen "
-                "bestehenden Plan und ersetzt keine vollständige Trainingsplanung."
+                "Die Empfehlung ergänzt deinen bestehenden Plan und ersetzt keine vollständige Trainingsplanung."
             )
 
     else:

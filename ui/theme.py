@@ -216,10 +216,10 @@ Elemente innerhalb des Metric-Wertes angesprochen.
 }}
 
 .readiness-card {{
-    padding: 1.1rem 1.2rem;
+    padding: 0.55rem 0.85rem;
     border-radius: var(--app-radius-lg);
-    border:1px solid var(--border-color);
-    min-height: 152px;
+    border: 1px solid var(--border-color);
+    min-height: 0;
     font-size: 0.95rem;
 }}
 

@@ -171,6 +171,64 @@ def _readiness_signal_messages(
 
     return messages
 
+def render_readiness_card(readiness: dict[str, Any]) -> None:
+    """Rendert die aktuelle Belastbarkeit als kompakten Analyse-Status."""
+    readiness_display = _readiness_display(readiness)
+    readiness_messages = _readiness_signal_messages(readiness)
+    status = str(readiness.get("status") or "").strip().casefold()
+
+    summary_line = (
+        f'{_safe(readiness_display["icon"])} '
+        f'<strong>{_safe(readiness_display["label"])}</strong>'
+    )
+
+    if not readiness_messages:
+        summary_line += (
+            ' <span style="color: var(--text-color-secondary, #667085);">'
+            '· '
+            f'{_safe(readiness_display["detail"])}'
+            '</span>'
+        )
+
+    readiness_content = (
+        f'<div class="readiness-card {_safe(readiness_display["css_class"])}" '
+        'style="padding: 9px 14px; margin-bottom: 10px;">'
+        '<div class="muted-label" style="margin: 0 0 3px 0; line-height: 1.15;">'
+        'AKTUELLE BELASTBARKEIT'
+        '</div>'
+        '<div class="readiness-title" style="margin: 0; line-height: 1.35;">'
+        f'{summary_line}'
+        '</div>'
+    )
+
+    if readiness_messages:
+        readiness_content += (
+            '<ul style="margin: 6px 0 0 22px; padding: 0;">'
+            + "".join(
+                f'<li style="margin: 2px 0;">{_safe(message)}</li>'
+                for message in readiness_messages
+            )
+            + '</ul>'
+        )
+
+        if status == "low":
+            readiness_content += (
+                '<div class="readiness-detail" style="margin-top: 6px;">'
+                'Für die nächsten 24–48 Stunden: Intensität oder Umfang deutlich '
+                'reduzieren oder aktive Regeneration nutzen.'
+                '</div>'
+            )
+        elif status in {"moderate", "medium", "caution"}:
+            readiness_content += (
+                '<div class="readiness-detail" style="margin-top: 6px;">'
+                'Beim nächsten geplanten Training Intensität und Umfang bewusst steuern.'
+                '</div>'
+            )
+
+    readiness_content += "</div>"
+
+    st.markdown(readiness_content, unsafe_allow_html=True)
+
 def render_coach_dashboard(
     *,
     user_name: str,
@@ -195,26 +253,9 @@ def render_coach_dashboard(
     bestehende Aufrufer nicht angepasst werden müssen.
     """
 
-    readiness_display = _readiness_display(readiness)
-    readiness_messages = _readiness_signal_messages(readiness)
-
     # ----------------------------------------------------
-    # HEADER
+    # EINORDNUNG
     # ----------------------------------------------------
-
-    st.markdown(
-        (
-            '<div class="welcome-card">'
-            f'<div class="welcome-title">'
-            f'Willkommen zurück, {_safe(user_name, "Athlet")}'
-            '</div>'
-            f'<div>{_safe(user_sport, "Sport")} &nbsp;·&nbsp; '
-            f'{_safe(user_level, "Level")} &nbsp;·&nbsp; '
-            f'{int(sessions_28 or 0)} Workouts in 28 Tagen</div>'
-            '</div>'
-        ),
-        unsafe_allow_html=True,
-    )
 
     st.markdown("### Einordnung")
 
@@ -222,89 +263,6 @@ def render_coach_dashboard(
         "Dein Coach ordnet dein absolviertes Training im Kontext "
         "deiner bisherigen Entwicklung ein und zeigt dir, was für "
         "dein nächstes geplantes Training relevant ist."
-    )
-
-    # ----------------------------------------------------
-    # AKTUELLE BELASTBARKEIT
-    # ----------------------------------------------------
-
-    status = str(
-        readiness.get("status") or ""
-    ).strip().casefold()
-
-    readiness_content = (
-        f'<div class="readiness-card '
-        f'{_safe(readiness_display["css_class"])}">'
-        '<div class="muted-label">'
-        'AKTUELLE BELASTBARKEIT'
-        '</div>'
-        '<div class="readiness-title">'
-        f'{_safe(readiness_display["icon"])} '
-        f'{_safe(readiness_display["label"])}'
-        '</div>'
-    )
-
-    # Konkrete Gründe anzeigen
-    if readiness_messages:
-        readiness_content += (
-            '<div class="readiness-detail" '
-            'style="margin-top: 14px;">'
-            'Deine aktuelle Trainingshistorie zeigt:'
-            '</div>'
-            '<ul style="margin-top: 8px; margin-bottom: 0;">'
-        )
-
-        for message in readiness_messages:
-            readiness_content += (
-                f'<li>{_safe(message)}</li>'
-            )
-
-        readiness_content += "</ul>"
-
-    else:
-        readiness_content += (
-            '<div class="readiness-detail" '
-            'style="margin-top: 14px;">'
-            f'{_safe(readiness_display["detail"])}'
-            '</div>'
-        )
-
-    # Kurzfristige Konsequenz nur bei reduzierter
-    # oder eingeschränkter Belastbarkeit
-    if status == "low":
-        readiness_content += (
-            '<div class="muted-label" '
-            'style="margin-top: 20px;">'
-            'FÜR DIE NÄCHSTEN 24–48 STUNDEN'
-            '</div>'
-            '<div class="readiness-detail" '
-            'style="margin-top: 6px;">'
-            'Wenn Training geplant ist, reduziere Intensität '
-            'oder Umfang deutlich oder nutze aktive Regeneration. '
-            'Liegt dein nächstes Training später, beurteile deine '
-            'Belastbarkeit zu diesem Zeitpunkt erneut.'
-            '</div>'
-        )
-
-    elif status in {"moderate", "medium", "caution"}:
-        readiness_content += (
-            '<div class="muted-label" '
-            'style="margin-top: 20px;">'
-            'FÜR DIE NÄCHSTEN 24–48 STUNDEN'
-            '</div>'
-            '<div class="readiness-detail" '
-            'style="margin-top: 6px;">'
-            'Wenn Training geplant ist, steuere Intensität und '
-            'Umfang bewusst und berücksichtige die genannten '
-            'Belastungssignale.'
-            '</div>'
-        )
-
-    readiness_content += "</div>"
-
-    st.markdown(
-        readiness_content,
-        unsafe_allow_html=True,
     )
 
     # ----------------------------------------------------

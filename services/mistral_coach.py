@@ -87,8 +87,12 @@ Overload-Signale oder eine kurzfristige Belastungsentscheidung
 nicht aus dem ersten Faktenblock übernehmen.
 
 TRAINING_RECENCY hat hohe Priorität:
+- Wenn days_since_last_workout mindestens 7 beträgt, muss die
+  Einordnung ausdrücklich sagen, seit wie vielen Tagen keine
+  Einheit dokumentiert wurde. Diese Information darf nicht nur
+  indirekt als „Pause“ oder „jüngste Pause“ formuliert werden.
 - Wenn in den letzten 7 Tagen keine Einheit dokumentiert wurde,
-  muss dies in der Einordnung ausdrücklich erwähnt werden.
+  muss dies ebenfalls ausdrücklich erwähnt werden.
 - Eine hohe Zahl von Einheiten über 28 Tage darf dann nicht als
   aktuell durchgehend konsequenter Trainingsrhythmus bezeichnet
   werden.

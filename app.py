@@ -33,7 +33,7 @@ from services.trends import build_trends
 from services.training_balance import build_training_balance
 
 
-from ui.coach_dashboard import render_coach_dashboard
+from ui.coach_dashboard import render_coach_dashboard, render_readiness_card
 from ui.status_dashboard import render_status_dashboard
 
 from services.history import (
@@ -1431,10 +1431,8 @@ with tab0:
             primary_goal=sportart,
         )
 
-        status_readiness = build_readiness_summary(
-            history_summary=history_summary,
-            training_analysis=status_training_analysis,
-        )
+        status_readiness = status_training_analysis.readiness
+        st.session_state["status_readiness"] = status_readiness
 
         status_positive = build_positive_observations(
             history_summary=history_summary,
@@ -1467,6 +1465,17 @@ with tab0:
         latest_meta = " · ".join(latest_meta_parts) if latest_meta_parts else "Noch keine gespeicherte Einheit vorhanden"
 
         if not st.session_state.get("workout_entry_requested", False):
+            st.markdown(
+                (
+                    '<div class="welcome-card">'
+                    f'<div class="welcome-title">Willkommen zurück, {html.escape(str(user_name or "Athlet"))}</div>'
+                    f'<div>{html.escape(str(sportart or "Sport"))} &nbsp;·&nbsp; '
+                    f'{html.escape(str(level or "Level"))} &nbsp;·&nbsp; '
+                    f'{int(history_summary.get("anzahl_einheiten", 0) or 0)} Workouts in 28 Tagen</div>'
+                    '</div>'
+                ),
+                unsafe_allow_html=True,
+            )
             render_status_dashboard(
                 user_name=user_name,
                 sessions_28=int(history_summary.get("anzahl_einheiten", 0) or 0),
@@ -2899,6 +2908,10 @@ with tab3:
 # ============================================================
 
 with tab4:
+    analysis_readiness = st.session_state.get("status_readiness")
+    if isinstance(analysis_readiness, dict) and analysis_readiness:
+        render_readiness_card(analysis_readiness)
+
     st.subheader("Analyse deiner letzten 28 Tage")
     st.caption(
         "So verteilt sich dein Training über Bewegungsmuster, Muskelgruppen, "
