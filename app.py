@@ -2997,7 +2997,7 @@ with tab4:
                             "Muskelgruppe": str(item.get("label", "–")),
                             "Anteil": float(item.get("share_percent", 0) or 0),
                         }
-                        for item in muscle_items[:8]
+                        for item in muscle_items
                     ])
                     .sort_values("Anteil", ascending=True)
                     .set_index("Muskelgruppe")

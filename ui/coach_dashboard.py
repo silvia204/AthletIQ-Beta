@@ -9,49 +9,36 @@ from analyzers.history import readiness
 
 
 def split_coach_feedback(text: str) -> dict[str, str]:
-    """
-    Trennt den von Mistral erzeugten Coachtext in:
-    - Coach-Einordnung
-    - Empfehlung für das nächste Training
-
-    Ältere Überschriften bleiben als Aliase erhalten,
-    damit bereits erzeugte Texte weiterhin funktionieren.
-    """
+    """Trennt kompakte Coachtexte; ältere gespeicherte Formate bleiben lesbar."""
     aliases = {
+        "aktuelle einordnung": "status",
+        "dein aktueller trainingsstatus": "status",
+        "trainingsstatus": "status",
+        "was auffällt": "insights",
+        "was auffaellt": "insights",
+        "für die nächsten einheiten": "next",
+        "fuer die naechsten einheiten": "next",
+        "bewegungsmuster": "legacy",
+        "muskelgruppen": "legacy",
+        "trainingsziele": "legacy",
+        "belastungsarten": "legacy",
+        "crossfit-movements": "legacy",
+        "crossfit movements": "legacy",
         "coach-einordnung": "summary",
         "coach einordnung": "summary",
         "coach-zusammenfassung": "summary",
         "coach zusammenfassung": "summary",
         "deine entwicklung": "summary",
-        "empfehlung für dein nächstes training": "next_session",
-        "empfehlung für die nächste einheit": "next_session",
-        "nächste einheit": "next_session",
     }
-
-    buffers = {
-        "summary": [],
-        "next_session": [],
-    }
+    buffers = {key: [] for key in ("status", "insights", "next", "legacy", "summary")}
     current = "summary"
-
     for raw in str(text or "").splitlines():
-        normalized = (
-            raw.strip()
-            .lstrip("#")
-            .strip()
-            .rstrip(":")
-            .casefold()
-        )
-
+        normalized = raw.strip().lstrip("#").strip().rstrip(":").casefold()
         if normalized in aliases:
             current = aliases[normalized]
         else:
             buffers[current].append(raw)
-
-    return {
-        key: "\n".join(lines).strip()
-        for key, lines in buffers.items()
-    }
+    return {key: "\n".join(lines).strip() for key, lines in buffers.items()}
 
 def _safe(value: object, fallback: str = "") -> str:
     return html.escape(
@@ -271,18 +258,31 @@ def render_coach_dashboard(
 
     feedback = split_coach_feedback(coach_text)
 
-    coach_summary = feedback.get("summary", "").strip()
-    next_session = feedback.get("next_session", "").strip()
+    compact_sections = (
+        ("Aktuelle Einordnung", "status"),
+        ("Was auffällt", "insights"),
+        ("Für die nächsten Einheiten", "next"),
+    )
 
-    st.markdown("#### Coach-Einordnung")
-
-    if coach_summary:
-        st.markdown(coach_summary)
+    has_compact_content = any(feedback.get(key, "").strip() for _, key in compact_sections)
+    if has_compact_content:
+        for title, key in compact_sections:
+            content = feedback.get(key, "").strip()
+            if content:
+                st.markdown(f"#### {title}")
+                st.markdown(content)
     else:
-        st.caption(
-            "Für eine ausführliche Coach-Einordnung liegen aktuell "
-            "noch nicht genügend Informationen vor."
-        )
+        st.markdown("#### Coach-Einordnung")
+        coach_summary = feedback.get("summary", "").strip()
+        if not coach_summary:
+            coach_summary = feedback.get("legacy", "").strip()
+        if coach_summary:
+            st.markdown(coach_summary)
+        else:
+            st.caption(
+                "Für eine ausführliche Coach-Einordnung liegen aktuell "
+                "noch nicht genügend Informationen vor."
+            )
 
     # ----------------------------------------------------
     # NÄCHSTES GEPLANTES TRAINING

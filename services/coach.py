@@ -46,6 +46,7 @@ def build_coach_feedback(
         weekly_focus=weekly_focus,
         positive_observations=positive_observations,
         history_summary=history_summary,
+        sportart=sportart,
     )
 
     return build_coach_with_mistral(

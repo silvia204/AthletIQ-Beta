@@ -34,157 +34,105 @@ def build_coach_with_mistral(
     api_key: str,
     model: str,
 ) -> dict[str, str]:
-    """
-    Erstellt Readiness-Summary und History-Coachtext aus zwei
-    strikt getrennten Faktenblöcken.
-    """
-
-    readiness_facts = coach_context.get(
-        "readiness_summary_facts",
-        {},
-    )
-    history_facts = coach_context.get(
-        "history_coach_facts",
-        {},
-    )
+    """Verdichtet deterministische Analysefakten zu wenigen Coaching-Erkenntnissen."""
+    readiness_facts = coach_context.get("readiness_summary_facts", {})
+    history_facts = coach_context.get("history_coach_facts", {})
 
     prompt = f"""
 {COACH_PROMPT}
 
-SPORTART
-{sportart}
+SPORTART: {sportart}
+LEVEL: {level}
+BESCHWERDEN: {injuries or "Keine"}
 
-LEVEL
-{level}
-
-BESCHWERDEN
-{injuries or "Keine"}
-
-----------------------------------------
-
-FAKTEN NUR FÜR READINESS_SUMMARY
-
-{json.dumps(readiness_facts, ensure_ascii=False, indent=2)}
-
-----------------------------------------
-
-FAKTEN NUR FÜR COACH_FEEDBACK
-
+DETERMINISTISCHE COACH-FAKTEN
 {json.dumps(history_facts, ensure_ascii=False, indent=2)}
 
-----------------------------------------
+READINESS-KURZFAKTEN
+{json.dumps(readiness_facts, ensure_ascii=False, indent=2)}
 
-TRENNUNG DER AUFGABEN
+AUFGABE
+Schreibe eine sehr kompakte Coach-Einordnung. Die Analyse ist im Hintergrund detailliert;
+hier sollen nur die wichtigsten Erkenntnisse erscheinen.
 
-Für READINESS_SUMMARY darfst du ausschließlich den ersten
-Faktenblock verwenden.
+WICHTIG:
+- Bewegungsmuster, Muskelgruppen, Trainingsziele, Belastungsarten und CrossFit-Movements
+  NICHT einzeln abarbeiten.
+- Führe zusammengehörige Signale zu EINEM Coaching-Punkt zusammen.
+  Beispiel: wenig horizontales Drücken + Brust unter Zielbereich = ein gemeinsamer Punkt.
+- Nenne nur 1 bis maximal 3 relevante Auffälligkeiten insgesamt.
+- Wenn mehrere Kategorien dieselbe Ursache beschreiben, erwähne sie nicht doppelt.
+- Wenn eine Kategorie keinen zusätzlichen Erkenntnisgewinn liefert, lasse sie vollständig weg.
+- Keine vollständige Bestandsaufnahme und keine Wiederholung der Analysewerte.
+- Keine internen Feldnamen, snake_case-Begriffe oder technischen Codes.
+- Erfinde keine Lücken. Muskelgruppen nur anhand von muscle_group_target_assessment bewerten.
+- Movement-Recency ist keine Trainingspause.
+- Formuliere historische Aussagen immer bezogen auf den dokumentierten Analysezeitraum:
+  statt „nie trainiert“ z. B. „im betrachteten Zeitraum nicht dokumentiert“.
+- Keine medizinischen, biomechanischen oder leistungsbezogenen Kausalbehauptungen ableiten,
+  die nicht ausdrücklich in den deterministischen Fakten stehen. Insbesondere nicht behaupten,
+  dass eine Verteilung Schulterstabilität, Leistungsfähigkeit oder Verletzungsrisiko einschränkt.
+- Begriffe wie „überrepräsentiert“ nur verwenden, wenn der entsprechende deterministische
+  Zielbereich tatsächlich den Status „over“ liefert.
+- Priorisiere: Lieber 1–2 wirklich relevante Erkenntnisse als mehrere schwächere Signale.
 
-Für COACH_FEEDBACK darfst du ausschließlich den zweiten
-Faktenblock verwenden.
+READINESS UND TRAININGSRECENCY HABEN HÖCHSTE PRIORITÄT:
+- Wenn seit der letzten dokumentierten Einheit >= 7 Tage vergangen sind, steht zunächst ein
+  kontrollierter Wiedereinstieg im Vordergrund. Historische Lücken dürfen genannt werden,
+  aber nicht als sofort abzuarbeitende Zusatzreize.
+- Bei >= 7 Tagen Pause keine Formulierung wie „die Pause bietet die Chance, Lücken zu schließen“.
+- low: Regeneration/sehr leichte Aktivität; keine Zusatzreize.
+- moderate/medium/caution: Belastung steuern; Lücken nur als späteres Thema, kein Zusatzblock.
+- high: Ohne längere Trainingspause darf bei einer echten relevanten Lücke eine kleine konkrete
+  Ergänzung mit höchstens 1–2 einfachen Übungsbeispielen genannt werden.
+- high nach >= 7 Tagen ohne dokumentierte Einheit bedeutet nicht automatisch Zusatztraining:
+  zuerst kontrollierter Wiedereinstieg, danach schrittweise Integration relevanter Lücken.
+- Ein zusätzlicher Trainingsblock ist nicht automatisch nötig.
 
-Der COACH_FEEDBACK-Text darf den Readiness-Status, die
-Overload-Signale oder eine kurzfristige Belastungsentscheidung
-nicht aus dem ersten Faktenblock übernehmen.
+LÄNGE:
+- STATUS: maximal 2 kurze Sätze.
+- INSIGHTS: maximal 3 kurze Absätze; jeder Absatz maximal 2 Sätze.
+- NEXT: maximal 2 kurze Sätze. Wenn keine konkrete Handlung nötig ist, sage das knapp.
+- Gesamter Coachtext idealerweise 120–180 Wörter, niemals mehr als 220 Wörter.
 
-TRAINING_RECENCY hat hohe Priorität:
-- Wenn days_since_last_workout mindestens 7 beträgt, muss die
-  Einordnung ausdrücklich sagen, seit wie vielen Tagen keine
-  Einheit dokumentiert wurde. Diese Information darf nicht nur
-  indirekt als „Pause“ oder „jüngste Pause“ formuliert werden.
-- Wenn in den letzten 7 Tagen keine Einheit dokumentiert wurde,
-  muss dies ebenfalls ausdrücklich erwähnt werden.
-- Eine hohe Zahl von Einheiten über 28 Tage darf dann nicht als
-  aktuell durchgehend konsequenter Trainingsrhythmus bezeichnet
-  werden.
-- Beschreibe den Wechsel zwischen den jüngsten 7 Tagen und den
-  7 Tagen davor rein faktisch.
-- Leite aus Trainingshäufigkeit keine Regenerationsfähigkeit,
-  Ausdauer oder sonstige Fähigkeit ab.
+AUSGABEFORMAT – exakt diese Tags und immer mit schließendem Tag:
+<READINESS_SUMMARY>Ein kurzer Satz nur zu Overload-Signalen.</READINESS_SUMMARY>
+<STATUS>Maximal zwei kurze Sätze zu Trainingsrhythmus, letzter Einheit und Readiness.</STATUS>
+<INSIGHTS>Ein bis maximal drei kurze Absätze mit den wichtigsten zusammengeführten Erkenntnissen.</INSIGHTS>
+<NEXT>Eine kurze koordinierte Konsequenz für die nächsten Einheiten oder der Hinweis, dass aktuell keine gezielte Ergänzung nötig ist.</NEXT>
 
-UNDERREPRESENTED_AREAS:
-- bedeuten ausschließlich, dass diese Bereiche im betrachteten
-  Zeitraum wenig oder nicht dokumentiert wurden.
-- Bezeichne sie nicht als Defizit, Dysbalance oder Schwäche.
-- Leite daraus keine gesundheitliche oder leistungsbezogene
-  Wirkung ab.
-
-TRAINING_PROFILE:
-- beschreibt ausschließlich die relative Verteilung der bereits
-  klassifizierten Trainingsdimensionen.
-- Erfinde keine eigenen Übungen oder Klassifikationen.
-- Eine hohe relative Häufigkeit ist keine Überlastung und eine
-  niedrige relative Häufigkeit ist kein Defizit.
-
-----------------------------------------
-
-AUSGABEFORMAT
-
-<READINESS_SUMMARY>
-Kurzer Absatz.
-</READINESS_SUMMARY>
-
-<COACH_FEEDBACK>
-3 bis 4 kurze zusammenhängende Absätze.
-</COACH_FEEDBACK>
-
-Schreibe nichts vor oder nach diesen Bereichen.
-
-READINESS_SUMMARY:
-- Verdichte nur die vorhandenen overload_signals.
-- Keine zusätzlichen Ursachen, Folgen oder Empfehlungen.
-- Sind keine overload_signals vorhanden, sage kurz, dass aktuell
-  keine relevanten Überlastungswarnungen erkannt wurden.
-
-COACH_FEEDBACK:
-- Rein beschreibende Einordnung der Historie und ihrer Entwicklung.
-- Keine Bulletpoints.
-- Keine konkreten Übungen.
-- Keine medizinischen oder gesundheitlichen Aussagen.
-- Keine kurzfristige Trainingssteuerung.
-- Kein "du solltest", "du musst", "reduziere" oder "nächste Einheit".
-- Der letzte Absatz darf einen bereits deterministisch hinterlegten
-  Weekly Focus einordnen, aber keine neue Priorität erfinden.
+Nichts vor oder nach diesen Tags ausgeben.
 """.strip()
 
-    response = call_mistral(
-        api_key=api_key,
-        model=model,
-        content=prompt,
-    )
+    response = call_mistral(api_key=api_key, model=model, content=prompt)
 
-    print("\n" + "=" * 80)
-    print("RAW HISTORY COACH RESPONSE")
-    print(response)
-    print("=" * 80 + "\n")
+    readiness_summary = _extract_section(response, "<READINESS_SUMMARY>", "</READINESS_SUMMARY>")
+    status = _extract_section(response, "<STATUS>", "</STATUS>")
+    insights = _extract_section(response, "<INSIGHTS>", "</INSIGHTS>")
+    next_step = _extract_section(response, "<NEXT>", "</NEXT>")
 
-    readiness_summary = _extract_section(
-        response,
-        "<READINESS_SUMMARY>",
-        "</READINESS_SUMMARY>",
-    )
+    # Robustheit gegen fehlerhafte/fehlende schließende Tags von Mistral:
+    # Kein Folgeabschnitt darf in den vorherigen Abschnitt hineinlaufen.
+    if "<NEXT>" in insights:
+        insights = insights.split("<NEXT>", 1)[0].strip()
+    for tag in ("<INSIGHTS>", "<NEXT>"):
+        if tag in status:
+            status = status.split(tag, 1)[0].strip()
+    for tag in ("<STATUS>", "<INSIGHTS>", "<NEXT>"):
+        if tag in readiness_summary:
+            readiness_summary = readiness_summary.split(tag, 1)[0].strip()
 
-    coach_feedback = _extract_section(
-        response,
-        "<COACH_FEEDBACK>",
-        "</COACH_FEEDBACK>",
-    )
-
-    if not readiness_summary:
+    if not readiness_summary or not status or not insights or not next_step:
         raise RuntimeError(
-            "Readiness-Zusammenfassung konnte nicht aus der "
-            "Mistral-Antwort gelesen werden."
+            "Kompakte Coach-Einordnung konnte nicht vollständig aus der Mistral-Antwort gelesen werden."
         )
 
-    if not coach_feedback:
-        raise RuntimeError(
-            "Coach-Feedback konnte nicht aus der "
-            "Mistral-Antwort gelesen werden."
-        )
-
-    return {
-        "readiness_summary": readiness_summary,
-        "coach_feedback": coach_feedback,
-    }
+    coach_feedback = (
+        f"## Aktuelle Einordnung\n{status}\n\n"
+        f"## Was auffällt\n{insights}\n\n"
+        f"## Für die nächsten Einheiten\n{next_step}"
+    )
+    return {"readiness_summary": readiness_summary, "coach_feedback": coach_feedback}
 
 def build_daily_coach_tips(
     *,

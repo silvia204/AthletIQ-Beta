@@ -15,6 +15,8 @@ from typing import Any
 
 from models.training_analysis import TrainingAnalysis
 
+from services.training_balance import assess_muscle_group_balance
+
 
 def _messages(
     items: list[dict] | None,
@@ -115,8 +117,46 @@ def _top_distribution(
     return result
 
 
+def _distribution(values: dict | None) -> dict[str, float]:
+    """Bereinigt eine bereits deterministisch aggregierte Dimension."""
+    result: dict[str, float] = {}
+    for key, value in (values or {}).items():
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric > 0:
+            result[str(key)] = round(numeric, 3)
+    return result
+
+
+def _undertraining_by_dimension(signals: list[dict] | None) -> dict[str, list[str]]:
+    """Ordnet deterministische Undertraining-Signale ihren Analysebereichen zu."""
+    result = {"movement_patterns": [], "muscle_groups": [], "training_goals": []}
+    muscle_codes = (
+        "quadriceps_to_hamstrings", "chest_to_latissimus", "front_to_rear_delts",
+        "hamstrings_not_recent", "glutes_not_recent", "latissimus_not_recent",
+        "rear_delts_not_recent", "deep_core_not_recent",
+    )
+    for item in signals or []:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code", "") or "")
+        message = str(item.get("message", "") or "").strip()
+        if not message:
+            continue
+        if code.startswith(("missing_goal_", "goal_")):
+            result["training_goals"].append(message)
+        elif code in muscle_codes:
+            result["muscle_groups"].append(message)
+        elif code.startswith(("missing_", "squat_", "hinge_", "horizontal_", "vertical_", "carry_", "anti_")):
+            result["movement_patterns"].append(message)
+    return result
+
+
 def _training_recency(
     history_summary: dict,
+    sportart: str,
 ) -> dict[str, Any]:
     windows = history_summary.get("windows", {})
 
@@ -195,6 +235,7 @@ def build_history_coach_context(
     weekly_focus: dict,
     positive_observations: list[dict],
     history_summary: dict,
+    sportart: str,
 ) -> dict[str, Any]:
     """
     Erstellt zwei getrennte Faktenblöcke:
@@ -218,6 +259,7 @@ def build_history_coach_context(
 
     recency = _training_recency(
         history_summary,
+        sportart,
     )
 
     allowed_undertraining = _messages(
@@ -288,17 +330,23 @@ def build_history_coach_context(
                     "average_rpe"
                 ),
             },
-            "training_profile_28_days": {
-                "dominant_movement_patterns": _top_distribution(
-                    window_28.get("movement_pattern_load")
-                ),
-                "dominant_training_goals": _top_distribution(
-                    window_28.get("training_goal_counts")
-                ),
-                "dominant_load_types": _top_distribution(
-                    window_28.get("load_type_load")
-                ),
+            "readiness": {
+                "status": str(readiness.get("status", "high") or "high"),
+                "overload_signals": _messages(readiness.get("overload_signals", [])),
             },
+            "training_dimensions_28_days": {
+                "movement_patterns": _distribution(window_28.get("movement_pattern_load")),
+                "muscle_groups": _distribution(window_28.get("muscle_group_load")),
+                "training_goals": _distribution(window_28.get("training_goal_counts")),
+                "load_types": _distribution(window_28.get("load_type_load")),
+            },
+            "underrepresented_by_dimension": _undertraining_by_dimension(
+                readiness.get("undertraining_signals", [])
+            ),
+            "muscle_group_target_assessment": assess_muscle_group_balance(
+                _distribution(window_28.get("muscle_group_load")),
+                sportart,
+            ),
             "movement_coverage": {
                 "coverage_percent": float(
                     movement_coverage.get(
@@ -313,6 +361,11 @@ def build_history_coach_context(
                 "expected": int(
                     movement_coverage.get("expected", 0) or 0
                 ),
+            },
+            "crossfit": {
+                "coverage": history_summary.get("crossfit_coverage", {}),
+                "missing_movements": history_summary.get("missing_crossfit_movements", []),
+                "completed_movements": history_summary.get("crossfit_movements", {}),
             },
             "underrepresented_areas": allowed_undertraining,
             "positive_observations": _positive_facts(

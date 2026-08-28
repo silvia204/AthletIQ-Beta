@@ -31,6 +31,7 @@ GOAL_ALIASES = {
 DIMENSION_LABELS = {
     "muscle_groups": {
         "quads": "Quadrizeps",
+        "quadriceps": "Quadrizeps",
         "hamstrings": "Hamstrings",
         "glutes": "Gesäß",
         "calves": "Waden",
@@ -40,6 +41,8 @@ DIMENSION_LABELS = {
         "shoulders": "Schultern",
         "biceps": "Bizeps",
         "triceps": "Trizeps",
+        "traps": "Trapezmuskel",
+        "forearms": "Unterarme",
         "core": "Core",
         "legs": "Beine",
         "upper_body": "Oberkörper",
@@ -303,6 +306,77 @@ STATUS_META = {
     "no_data": {"label": "Keine Daten", "symbol": "•", "priority": 1},
 }
 
+
+
+
+# Sportartspezifische Zielkorridore für den relativen Muskelgruppen-Anteil.
+# Bewusst breite Korridore: Grundlage für Coach-Einordnung, kein Trainings-Sollplan.
+MUSCLE_GROUP_TARGETS = {
+    "crossfit": {
+        "quadriceps": (0.08, 0.20),
+        "hamstrings": (0.06, 0.16),
+        "glutes": (0.07, 0.18),
+        "calves": (0.01, 0.07),
+        "chest": (0.03, 0.10),
+        "shoulders": (0.05, 0.14),
+        "triceps": (0.02, 0.08),
+        "back": (0.05, 0.14),
+        "lats": (0.04, 0.12),
+        "traps": (0.01, 0.07),
+        "biceps": (0.01, 0.06),
+        "hip_flexors": (0.01, 0.06),
+        "core": (0.05, 0.14),
+        "forearms": (0.02, 0.09),
+    },
+    "hyrox": {
+        "quadriceps": (0.12, 0.24),
+        "hamstrings": (0.07, 0.16),
+        "glutes": (0.09, 0.20),
+        "calves": (0.04, 0.11),
+        "chest": (0.02, 0.08),
+        "shoulders": (0.03, 0.10),
+        "triceps": (0.02, 0.07),
+        "back": (0.04, 0.11),
+        "lats": (0.03, 0.09),
+        "traps": (0.01, 0.06),
+        "biceps": (0.01, 0.05),
+        "hip_flexors": (0.03, 0.09),
+        "core": (0.05, 0.13),
+        "forearms": (0.02, 0.08),
+    },
+    "running": {
+        "quadriceps": (0.14, 0.28),
+        "hamstrings": (0.10, 0.22),
+        "glutes": (0.11, 0.23),
+        "calves": (0.08, 0.18),
+        "chest": (0.00, 0.05),
+        "shoulders": (0.00, 0.05),
+        "triceps": (0.00, 0.04),
+        "back": (0.01, 0.07),
+        "lats": (0.00, 0.05),
+        "traps": (0.00, 0.04),
+        "biceps": (0.00, 0.03),
+        "hip_flexors": (0.05, 0.13),
+        "core": (0.06, 0.15),
+        "forearms": (0.00, 0.03),
+    },
+    "general_fitness": {
+        "quadriceps": (0.07, 0.16),
+        "hamstrings": (0.05, 0.13),
+        "glutes": (0.06, 0.15),
+        "calves": (0.02, 0.08),
+        "chest": (0.04, 0.11),
+        "shoulders": (0.04, 0.11),
+        "triceps": (0.02, 0.08),
+        "back": (0.05, 0.13),
+        "lats": (0.04, 0.11),
+        "traps": (0.01, 0.07),
+        "biceps": (0.02, 0.07),
+        "hip_flexors": (0.01, 0.07),
+        "core": (0.05, 0.13),
+        "forearms": (0.01, 0.07),
+    },
+}
 
 def _safe_float(value: Any) -> float:
     try:
@@ -626,3 +700,46 @@ def build_training_balance(
     }
 
     return result
+
+def get_muscle_group_targets(sport: str | None) -> dict[str, tuple[float, float]]:
+    """Liefert Zielkorridore für CrossFit, HYROX, Laufen und allgemeine Fitness."""
+    key = str(sport or "").strip().casefold()
+    key = key.replace("-", "_").replace(" ", "_")
+    aliases = {
+        "crossfit": "crossfit",
+        "cross_fit": "crossfit",
+        "hyrox": "hyrox",
+        "laufen": "running",
+        "running": "running",
+        "lauf": "running",
+        "halbmarathon": "running",
+        "halb_marathon": "running",
+        "half_marathon": "running",
+        "marathon": "running",
+        "fitness": "general_fitness",
+        "fitness_allgemein": "general_fitness",
+        "allgemeine_fitness": "general_fitness",
+        "general_fitness": "general_fitness",
+    }
+    return dict(MUSCLE_GROUP_TARGETS.get(aliases.get(key, key), {}))
+
+
+def assess_muscle_group_balance(
+    muscle_distribution: dict[str, float] | None,
+    sport: str | None,
+) -> dict[str, dict[str, float | str]]:
+    """Ordnet jeden Muskel deterministisch als unter/im/über Zielbereich ein."""
+    targets = get_muscle_group_targets(sport)
+    distribution = muscle_distribution or {}
+    result: dict[str, dict[str, float | str]] = {}
+    for muscle, (lower, upper) in targets.items():
+        share = float(distribution.get(muscle, 0.0) or 0.0)
+        status = "under" if share < lower else "over" if share > upper else "in_range"
+        result[muscle] = {
+            "share": round(share, 4),
+            "target_min": lower,
+            "target_max": upper,
+            "status": status,
+        }
+    return result
+

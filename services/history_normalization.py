@@ -42,6 +42,15 @@ MOVEMENT_PATTERN_ALIASES = {
 MUSCLE_GROUP_ALIASES = {
     "latissimus": "lats",
     "latissimus dorsi": "lats",
+    "quads": "quadriceps",
+    "front delts": "shoulders",
+    "upper back": "back",
+    "spinal erectors": "back",
+    "trapezius": "traps",
+    "abdominals": "core",
+    "deep core": "core",
+    "obliques": "core",
+    "forearms grip": "forearms",
 }
 
 
