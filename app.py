@@ -89,7 +89,7 @@ APP_ICON_LIGHT_PATH = ASSETS_DIR / "AthletIQ_Logo_klein.png"
 APP_ICON_DARK_PATH = ASSETS_DIR / "AthletIQ_Logo_klein_dunkel.png"
 
 APP_LOGO_LIGHT_PATH = ASSETS_DIR / "AthletIQ_Logo_head.png"
-APP_LOGO_DARK_PATH = ASSETS_DIR / "AthletIQ_Logo_head_dunkel.png"
+APP_LOGO_DARK_PATH = ASSETS_DIR / "AthletIQ_Logo_head_dunkel_freigestellt.png"
 
 
 # Browser-/App-Icon
