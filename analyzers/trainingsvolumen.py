@@ -25,27 +25,67 @@ def analyze_trainingsvolumen(
 
         rounds = segment.rounds or 1
 
+        rep_scheme = (
+            segment.rep_scheme
+            if segment.rep_scheme
+            else None
+        )
+
+        rep_scheme_total = (
+            sum(rep_scheme)
+            if rep_scheme
+            else None
+        )
+
         for element in segment.elements:
 
             sets = element.sets or 1
-            reps = element.reps or 0
 
-            multiplier = rounds * sets
+            # ------------------------------------------------
+            # EFFEKTIVE WIEDERHOLUNGEN
+            # ------------------------------------------------
+
+            if (
+                rep_scheme_total is not None
+                and element.reps is None
+            ):
+                # Beispiel:
+                # 21-15-9 Burpees + Pull-ups
+                #
+                # Pro Movement:
+                # 21 + 15 + 9 = 45 Reps
+                effective_reps = (rep_scheme_total * rounds)
+
+            else:
+                reps = element.reps or 0
+
+                effective_reps = (
+                    reps
+                    * sets
+                    * rounds
+                )
 
             # Wiederholungen
-            volume.repetitions += reps * multiplier
+            volume.repetitions += (
+                effective_reps
+            )
 
             # Distanz
             if element.distance is not None:
 
                 if element.distance_unit == "m":
                     volume.distance_m += (
-                        element.distance * rounds
+                        element.distance
+                        * rounds
+                        * sets
                     )
 
                 elif element.distance_unit == "km":
                     volume.distance_m += (
-                        element.distance * 1000 * rounds
+                        element.distance
+                        * 1000
+                        * rounds
+                        * sets
                     )
 
             # Dauer
@@ -57,7 +97,9 @@ def analyze_trainingsvolumen(
                     "seconds",
                 ):
                     volume.duration_seconds += (
-                        element.duration * rounds
+                        element.duration
+                        * rounds
+                        * sets
                     )
 
                 elif element.duration_unit in (
@@ -66,13 +108,18 @@ def analyze_trainingsvolumen(
                     "minutes",
                 ):
                     volume.duration_seconds += (
-                        element.duration * 60 * rounds
+                        element.duration
+                        * 60
+                        * rounds
+                        * sets
                     )
 
             # Calories
             if element.calories is not None:
                 volume.calories += (
-                    element.calories * rounds
+                    element.calories
+                    * rounds
+                    * sets
                 )
 
             # Externe Last (Tonnage)
@@ -82,8 +129,7 @@ def analyze_trainingsvolumen(
             ):
                 volume.external_load_kg += (
                     element.intensity.weight
-                    * reps
-                    * multiplier
+                    * effective_reps
                 )
 
     return volume

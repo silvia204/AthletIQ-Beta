@@ -85,6 +85,14 @@ class WorkoutElement:
 
     distance_unit: str | None = None
 
+    speed: float | None = None
+
+    speed_unit: str | None = None
+
+    pace: str | None = None
+
+    pace_unit: str | None = None
+
     duration: float | None = None
 
     duration_unit: str | None = None
@@ -118,6 +126,13 @@ class WorkoutSegment:
 
     rounds: int | None = None
 
+    # Wiederholungsschema für Workouts wie:
+    # 21-15-9, 15-12-9, 10-8-6-4-2 usw.
+    #
+    # Das Schema gilt für alle Elemente des Segments,
+    # sofern deren eigene reps nicht gesetzt sind.
+    rep_scheme: list[int] | None = None
+    
     time_cap_minutes: int | None = None
 
     elements: list[WorkoutElement] = field(

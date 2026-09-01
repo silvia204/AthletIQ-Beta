@@ -116,6 +116,29 @@ def _build_parsed_workout(
         [],
     ):
 
+        raw_rep_scheme = segment_data.get(
+            "rep_scheme"
+        )
+
+        rep_scheme: list[int] | None = None
+
+        if isinstance(raw_rep_scheme, list):
+            cleaned_rep_scheme = []
+
+            for value in raw_rep_scheme:
+                try:
+                    parsed_value = int(value)
+                except (TypeError, ValueError):
+                    continue
+
+                if parsed_value > 0:
+                    cleaned_rep_scheme.append(
+                        parsed_value
+                    )
+
+            if cleaned_rep_scheme:
+                rep_scheme = cleaned_rep_scheme
+
         segment = WorkoutSegment(
 
             type=segment_data.get(
@@ -130,6 +153,8 @@ def _build_parsed_workout(
             rounds=segment_data.get(
                 "rounds",
             ),
+
+            rep_scheme=rep_scheme,
 
             time_cap_minutes=segment_data.get(
                 "time_cap_minutes",
@@ -209,6 +234,22 @@ def _build_parsed_workout(
 
                 distance_unit=element_data.get(
                     "distance_unit",
+                ),
+
+                speed=element_data.get(
+                    "speed",
+                ),
+
+                speed_unit=element_data.get(
+                    "speed_unit",
+                ),
+
+                pace=element_data.get(
+                    "pace",
+                ),
+
+                pace_unit=element_data.get(
+                    "pace_unit",
                 ),
 
                 duration=element_data.get(

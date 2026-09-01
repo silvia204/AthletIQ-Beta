@@ -402,7 +402,8 @@ def movements_for_level(
     return tuple(
         movement
         for movement in MOVEMENTS
-        if order[movement.minimum_level] <= current
+        if movement.is_crossfit_movement
+        and order[movement.minimum_level] <= current
     )
 
 # ============================================================================

@@ -36,6 +36,8 @@ Dazu gehören beispielsweise:
 - Prozent vom 1RM
 - Tempo
 - Distanzen
+- Geschwindigkeit
+- Pace
 - Zeiten
 - Kalorien
 - Time Caps
@@ -80,6 +82,26 @@ setze den Wert auf null.
 
 9. Gib ausschließlich gültiges JSON zurück.
 
+10. Laufgeschwindigkeit und Pace werden nur extrahiert,
+wenn sie ausdrücklich angegeben sind.
+
+11. Geschwindigkeit wird in den Feldern "speed" und "speed_unit"
+gespeichert.
+
+Beispiele:
+- 12 km/h -> speed: 12, speed_unit: "km/h"
+- 8 mph -> speed: 8, speed_unit: "mph"
+
+12. Pace wird in den Feldern "pace" und "pace_unit" gespeichert.
+
+Beispiele:
+- 5:00 min/km -> pace: "5:00", pace_unit: "min/km"
+- 7:30 min/mi -> pace: "7:30", pace_unit: "min/mi"
+- 4:45/km -> pace: "4:45", pace_unit: "min/km"
+
+13. Geschwindigkeit und Pace nicht selbst aus Distanz und Zeit berechnen.
+Nur ausdrücklich angegebene Werte extrahieren.
+
 --------------------------------------------------
 STRUKTURIERUNGSREGELN
 --------------------------------------------------
@@ -111,6 +133,7 @@ Workout:
       "type": "rounds",
       "name": null,
       "rounds": 5,
+      "rep_scheme": null,
       "time_cap_minutes": null,
       "notes": null,
       "elements": [
@@ -127,6 +150,10 @@ Workout:
           "tempo": null,
           "distance": null,
           "distance_unit": null,
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
           "duration": null,
           "duration_unit": null,
           "calories": null,
@@ -145,6 +172,10 @@ Workout:
           "tempo": null,
           "distance": null,
           "distance_unit": null,
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
           "duration": null,
           "duration_unit": null,
           "calories": null,
@@ -163,6 +194,10 @@ Workout:
           "tempo": null,
           "distance": null,
           "distance_unit": null,
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
           "duration": null,
           "duration_unit": null,
           "calories": null,
@@ -181,6 +216,10 @@ Workout:
           "tempo": null,
           "distance": 500,
           "distance_unit": "m",
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
           "duration": null,
           "duration_unit": null,
           "calories": null,
@@ -199,6 +238,10 @@ Workout:
           "tempo": null,
           "distance": 400,
           "distance_unit": "m",
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
           "duration": null,
           "duration_unit": null,
           "calories": null,
@@ -209,6 +252,127 @@ Workout:
   ],
   "notes": null
 }
+--------------------------------------------------
+WIEDERHOLUNGSSCHEMATA
+--------------------------------------------------
+
+Wenn für mehrere Übungen ein gemeinsames wechselndes
+Wiederholungsschema angegeben ist, speichere dieses im Feld
+"rep_scheme" des gemeinsamen Segments.
+
+Typische Beispiele:
+
+21-15-9
+15-12-9
+10-8-6-4-2
+2-4-6-8-10
+50-40-30-20-10
+
+Ein solches Schema ist KEINE feste Rundenzahl.
+
+Speichere es deshalb NICHT im Feld "rounds".
+
+Die einzelnen Zahlen des Schemas dürfen ebenfalls NICHT als feste
+"reps" der einzelnen Movements gespeichert werden.
+
+Beispiel:
+
+Workout:
+21-15-9
+Burpees
+Pull-ups
+
+↓
+
+{
+  "segments": [
+    {
+      "type": "rep_scheme",
+      "name": null,
+      "rounds": null,
+      "rep_scheme": [21, 15, 9],
+      "time_cap_minutes": null,
+      "notes": null,
+      "elements": [
+        {
+          "movement": "Burpees",
+          "equipment": null,
+          "sets": null,
+          "reps": null,
+          "weight": null,
+          "weight_unit": null,
+          "percent_1rm": null,
+          "prescribed_rpe": null,
+          "rir": null,
+          "tempo": null,
+          "distance": null,
+          "distance_unit": null,
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
+          "duration": null,
+          "duration_unit": null,
+          "calories": null,
+          "notes": null
+        },
+        {
+          "movement": "Pull-ups",
+          "equipment": null,
+          "sets": null,
+          "reps": null,
+          "weight": null,
+          "weight_unit": null,
+          "percent_1rm": null,
+          "prescribed_rpe": null,
+          "rir": null,
+          "tempo": null,
+          "distance": null,
+          "distance_unit": null,
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
+          "duration": null,
+          "duration_unit": null,
+          "calories": null,
+          "notes": null
+        }
+      ]
+    }
+  ],
+  "notes": null
+}
+
+Das bedeutet:
+
+- Burpees: 21, dann 15, dann 9 Wiederholungen.
+- Pull-ups: 21, dann 15, dann 9 Wiederholungen.
+- "rounds" bleibt null.
+- "reps" der einzelnen Elemente bleibt null.
+- "rep_scheme" enthält die vollständige Reihenfolge.
+- Die Zahlen des Schemas dürfen nicht summiert als "reps" gespeichert werden.
+- Es dürfen nicht für jede Stufe des Schemas neue Movement-Elemente erzeugt werden.
+
+Eine feste Rundenzahl und ein Wiederholungsschema sind unterschiedliche
+Workout-Strukturen.
+
+Beispiel für feste Runden:
+
+5 Runden
+10 Burpees
+15 Pull-ups
+
+↓
+
+"rounds": 5
+"rep_scheme": null
+
+Die jeweiligen Movement-Wiederholungen bleiben dabei:
+
+Burpees: "reps": 10
+Pull-ups: "reps": 15
+
 
 Erzeuge niemals ein Workout-Element nur deshalb, weil eine Strukturangabe
 wie Rundenzahl, Time Cap oder Segmentname vorhanden ist.
@@ -250,6 +414,7 @@ Workout:
       "type": "cardio",
       "name": "Run",
       "rounds": null,
+      "rep_scheme": null,
       "time_cap_minutes": null,
       "notes": null,
       "elements": [
@@ -266,6 +431,10 @@ Workout:
           "tempo": null,
           "distance": null,
           "distance_unit": null,
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
           "duration": 30,
           "duration_unit": "seconds",
           "calories": null,
@@ -282,6 +451,124 @@ als erstes Element des ersten Segments ausgegeben werden.
 
 Falls Wiederholungen einer Zeit- oder Distanzvorgabe vorangestellt sind (z. B. 7 × 30 Sekunden oder 10 × 400 m), 
 werden diese als "sets" gespeichert. Die Zeit bzw. Distanz wird in "duration" bzw. "distance" eingetragen.
+
+--------------------------------------------------
+LAUFGESCHWINDIGKEIT UND PACE
+--------------------------------------------------
+
+Bei Running/Laufen können zusätzlich zur Distanz oder Dauer eine
+Geschwindigkeit oder Pace angegeben sein.
+
+Geschwindigkeit:
+
+- 12 km/h -> speed = 12, speed_unit = "km/h"
+- 10.5 km/h -> speed = 10.5, speed_unit = "km/h"
+- 8 mph -> speed = 8, speed_unit = "mph"
+
+Pace:
+
+- 5:00 min/km -> pace = "5:00", pace_unit = "min/km"
+- 4:45/km -> pace = "4:45", pace_unit = "min/km"
+- 7:30 min/mi -> pace = "7:30", pace_unit = "min/mi"
+
+Pace wird als Zeitstring im Format Minuten:Sekunden gespeichert.
+Eine Pace wie 4:35 min/km darf NICHT als Dezimalzahl 4.35 gespeichert werden.
+
+Wenn sowohl Pace als auch Geschwindigkeit ausdrücklich angegeben sind,
+dürfen beide Werte gespeichert werden.
+
+Wenn nur Distanz und Dauer angegeben sind, darf daraus KEINE Pace oder
+Geschwindigkeit berechnet werden.
+
+Beispiel:
+
+Workout:
+5 km Run @ 12 km/h
+
+↓
+
+{
+  "segments": [
+    {
+      "type": "cardio",
+      "name": "Run",
+      "rounds": null,
+      "rep_scheme": null,
+      "time_cap_minutes": null,
+      "notes": null,
+      "elements": [
+        {
+          "movement": "Run",
+          "equipment": null,
+          "sets": null,
+          "reps": null,
+          "weight": null,
+          "weight_unit": null,
+          "percent_1rm": null,
+          "prescribed_rpe": null,
+          "rir": null,
+          "tempo": null,
+          "distance": 5,
+          "distance_unit": "km",
+          "speed": 12,
+          "speed_unit": "km/h",
+          "pace": null,
+          "pace_unit": null,
+          "duration": null,
+          "duration_unit": null,
+          "calories": null,
+          "notes": null
+        }
+      ]
+    }
+  ],
+  "notes": null
+}
+
+Beispiel:
+
+Workout:
+10 km Run @ 5:15 min/km
+
+↓
+
+{
+  "segments": [
+    {
+      "type": "cardio",
+      "name": "Run",
+      "rounds": null,
+      "rep_scheme": null,
+      "time_cap_minutes": null,
+      "notes": null,
+      "elements": [
+        {
+          "movement": "Run",
+          "equipment": null,
+          "sets": null,
+          "reps": null,
+          "weight": null,
+          "weight_unit": null,
+          "percent_1rm": null,
+          "prescribed_rpe": null,
+          "rir": null,
+          "tempo": null,
+          "distance": 10,
+          "distance_unit": "km",
+          "speed": null,
+          "speed_unit": null,
+          "pace": "5:15",
+          "pace_unit": "min/km",
+          "duration": null,
+          "duration_unit": null,
+          "calories": null,
+          "notes": null
+        }
+      ]
+    }
+  ],
+  "notes": null
+}
 
 --------------------------------------------------
 ZEILENSTRUKTUR UND GEWICHTSANGABEN
@@ -378,6 +665,7 @@ JSON-SCHEMA
       "type": "",
       "name": "",
       "rounds": null,
+      "rep_scheme": null,
       "time_cap_minutes": null,
       "notes": null,
       "elements": [
@@ -401,6 +689,10 @@ JSON-SCHEMA
 
           "distance": null,
           "distance_unit": null,
+          "speed": null,
+          "speed_unit": null,
+          "pace": null,
+          "pace_unit": null,
 
           "duration": null,
           "duration_unit": null,

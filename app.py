@@ -1,10 +1,13 @@
 import html
+import re
 from copy import deepcopy
+from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
 
 import pandas as pd
+from PIL import Image
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 
@@ -49,8 +52,8 @@ from services.scoring import (
     get_load_status,
 )
 from services.sheets import (
+    append_workout_history,
     read_workout_history,
-    write_workout_history,
 )
 from services.utils import (
     create_stable_hash,
@@ -70,14 +73,105 @@ from models.training_volume import TrainingVolume
 # APP-KONFIGURATION
 # ============================================================
 
+import base64
+from pathlib import Path
+from PIL import Image
+
+
+# ============================================================
+# APP-KONFIGURATION
+# ============================================================
+
+APP_DIR = Path(__file__).resolve().parent
+ASSETS_DIR = APP_DIR / "assets"
+
+APP_ICON_LIGHT_PATH = ASSETS_DIR / "AthletIQ_Logo_klein.png"
+APP_ICON_DARK_PATH = ASSETS_DIR / "AthletIQ_Logo_klein_dunkel.png"
+
+APP_LOGO_LIGHT_PATH = ASSETS_DIR / "AthletIQ_Logo_head.png"
+APP_LOGO_DARK_PATH = ASSETS_DIR / "AthletIQ_Logo_head_dunkel.png"
+
+
+# Browser-/App-Icon
+try:
+    page_icon = Image.open(APP_ICON_LIGHT_PATH)
+except Exception:
+    page_icon = "A"
+
+
 st.set_page_config(
-    page_title="EU Sport KI Coach",
-    page_icon="🇪🇺",
+    page_title="AthletIQ",
+    page_icon=page_icon,
     layout="wide",
 )
+
 apply_theme()
 
-st.title("🇪🇺 KI Sportcoach")
+
+# ============================================================
+# ATHLETIQ LOGO – LIGHT / DARK MODE
+# ============================================================
+
+def image_to_base64(path: Path) -> str:
+    with open(path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode()
+
+
+if APP_LOGO_LIGHT_PATH.exists() and APP_LOGO_DARK_PATH.exists():
+
+    logo_light = image_to_base64(APP_LOGO_LIGHT_PATH)
+    logo_dark = image_to_base64(APP_LOGO_DARK_PATH)
+
+    st.markdown(
+        f"""
+        <style>
+        .athletiq-logo {{
+            width: 360px;
+            max-width: 100%;
+            height: auto;
+        }}
+
+        .athletiq-logo-dark {{
+            display: none;
+        }}
+
+        @media (prefers-color-scheme: dark) {{
+            .athletiq-logo-light {{
+                display: none;
+            }}
+
+            .athletiq-logo-dark {{
+                display: block;
+            }}
+        }}
+        </style>
+
+        <div class="athletiq-logo-container">
+            <img
+                src="data:image/png;base64,{logo_light}"
+                class="athletiq-logo athletiq-logo-light"
+                alt="AthletIQ"
+            >
+            <img
+                src="data:image/png;base64,{logo_dark}"
+                class="athletiq-logo athletiq-logo-dark"
+                alt="AthletIQ"
+            >
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+elif APP_LOGO_LIGHT_PATH.exists():
+    st.image(str(APP_LOGO_LIGHT_PATH), width=360)
+
+elif APP_LOGO_DARK_PATH.exists():
+    st.image(str(APP_LOGO_DARK_PATH), width=360)
+
+else:
+    st.title("AthletIQ")
+
+
 st.caption(
     "Workout erfassen, Belastung analysieren und "
     "Trainingshistorie berücksichtigen."
@@ -219,6 +313,8 @@ DEFAULT_SESSION_STATE = {
     "profiles_cache": None,
     "history_cache": None,
     "history_cache_athlete": None,
+    "main_navigation": "🧠 Mein Coach",
+    "coach_navigation": "Übersicht",
 }
 
 for key, default_value in DEFAULT_SESSION_STATE.items():
@@ -686,6 +782,22 @@ def format_workout_element_details(
             distance_text += f" {distance_unit}"
         details.append(distance_text)
 
+    speed = getattr(element, "speed", None)
+    speed_unit = getattr(element, "speed_unit", None)
+    if speed is not None:
+        speed_text = f"{speed:g}" if isinstance(speed, (int, float)) else str(speed)
+        if speed_unit:
+            speed_text += f" {speed_unit}"
+        details.append(speed_text)
+
+    pace = str(getattr(element, "pace", None) or "").strip()
+    pace_unit = getattr(element, "pace_unit", None)
+    if pace:
+        pace_text = pace
+        if pace_unit:
+            pace_text += f" {pace_unit}"
+        details.append(pace_text)
+
     duration = getattr(element, "duration", None)
     duration_unit = getattr(element, "duration_unit", None)
     if duration is not None:
@@ -715,12 +827,34 @@ def render_current_workout(
 
     for segment in parsed_workout.segments:
         segment_type = str(getattr(segment, "type", "") or "").strip()
+        segment_type_labels = {
+            "rep_scheme": "Wiederholungsschema",
+            "rounds": "Runden",
+            "cardio": "Cardio",
+        }
+
+        display_segment_type = segment_type_labels.get(
+            segment_type,
+            segment_type,
+        )
         segment_name = str(getattr(segment, "name", "") or "").strip()
 
-        if segment_name and segment_type and segment_name.casefold() != segment_type.casefold():
-            heading = f"{segment_name} · {segment_type}"
+        if (
+            segment_name
+            and display_segment_type
+            and segment_name.casefold()
+            != display_segment_type.casefold()
+        ):
+            heading = (
+                f"{segment_name} · "
+                f"{display_segment_type}"
+            )
         else:
-            heading = segment_name or segment_type or "Workout"
+            heading = (
+                segment_name
+                or display_segment_type
+                or "Workout"
+            )
 
         st.markdown(f"#### {heading}")
 
@@ -729,6 +863,13 @@ def render_current_workout(
         rounds = getattr(segment, "rounds", None)
         if rounds is not None:
             segment_details.append(f"{rounds} Runden")
+
+        rep_scheme = getattr(segment, "rep_scheme", None)
+        if rep_scheme:
+            rep_scheme_text = "-".join(
+                str(rep) for rep in rep_scheme
+            )
+            segment_details.append(rep_scheme_text)
 
         time_cap = getattr(segment, "time_cap_minutes", None)
         if time_cap is not None:
@@ -763,6 +904,101 @@ def render_current_workout(
 
 
 
+
+def optional_duration_input(
+    label: str,
+    value: int | float | None,
+    *,
+    key: str,
+) -> float | None:
+    """
+    Editiert optionale Zeitangaben und normalisiert sie auf Minuten.
+
+    Erlaubt z. B.:
+    4.5
+    4,5
+    4:30
+    4 min 30 Sekunden
+    90 Sekunden
+    1 h 15 min
+
+    Leeres Feld bedeutet None.
+    """
+
+    if value is None:
+        current_value = ""
+    else:
+        current_value = f"{value:g}" if isinstance(value, (int, float)) else str(value)
+
+    raw_value = st.text_input(
+        label,
+        value=current_value,
+        key=key,
+        placeholder="z. B. 4:30 oder 4 min 30 Sekunden",
+    ).strip()
+
+    if not raw_value:
+        return None
+
+    normalized = (
+        raw_value.casefold()
+        .replace(",", ".")
+        .replace("stunden", "h")
+        .replace("stunde", "h")
+        .replace("std.", "h")
+        .replace("std", "h")
+        .replace("minutes", "min")
+        .replace("minute", "min")
+        .replace("minuten", "min")
+        .replace("seconds", "sec")
+        .replace("second", "sec")
+        .replace("sekunden", "sec")
+        .replace("sekunde", "sec")
+        .replace("secs", "sec")
+        .replace("sek", "sec")
+        .strip()
+    )
+
+    # Reine Zahl: wie bisher als Minuten interpretieren.
+    try:
+        return float(normalized)
+    except ValueError:
+        pass
+
+    # mm:ss bzw. hh:mm:ss
+    colon_match = re.fullmatch(
+        r"\s*(\d+):([0-5]?\d)(?::([0-5]?\d))?\s*",
+        normalized,
+    )
+    if colon_match:
+        first = int(colon_match.group(1))
+        second = int(colon_match.group(2))
+        third = colon_match.group(3)
+
+        if third is None:
+            return first + second / 60
+
+        return first * 60 + second + int(third) / 60
+
+    hour_match = re.search(r"(\d+(?:\.\d+)?)\s*h\b", normalized)
+    minute_match = re.search(r"(\d+(?:\.\d+)?)\s*min\b", normalized)
+    second_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:sec|s)\b", normalized)
+
+    if hour_match or minute_match or second_match:
+        hours = float(hour_match.group(1)) if hour_match else 0.0
+        minutes = float(minute_match.group(1)) if minute_match else 0.0
+        seconds = float(second_match.group(1)) if second_match else 0.0
+
+        return hours * 60 + minutes + seconds / 60
+
+    st.warning(
+        f"„{label}“ konnte nicht als Dauer erkannt werden. "
+        "Nutze z. B. 4:30, 4 min 30 Sekunden, 90 Sekunden "
+        "oder 1 h 15 min."
+    )
+    return value
+
+
 def optional_number_input(
     label: str,
     value: int | float | None,
@@ -794,6 +1030,73 @@ def optional_number_input(
 
     return number
 
+def optional_rep_scheme_input(
+    label: str,
+    value: list[int] | None,
+    *,
+    key: str,
+) -> list[int] | None:
+    """
+    Editiert ein Wiederholungsschema wie 21-15-9.
+
+    Leeres Feld bedeutet None.
+    Erlaubt z. B.:
+    21-15-9
+    21,15,9
+    21 15 9
+    """
+
+    current_value = (
+        "-".join(str(rep) for rep in value)
+        if value
+        else ""
+    )
+
+    raw_value = st.text_input(
+        label,
+        value=current_value,
+        key=key,
+        placeholder="z. B. 21-15-9",
+    ).strip()
+
+    if not raw_value:
+        return None
+
+    normalized = (
+        raw_value
+        .replace(",", "-")
+        .replace(" ", "-")
+    )
+
+    parts = [
+        part.strip()
+        for part in normalized.split("-")
+        if part.strip()
+    ]
+
+    try:
+        rep_scheme = [
+            int(part)
+            for part in parts
+        ]
+    except ValueError:
+        st.warning(
+            f"„{label}“ muss aus positiven ganzen Zahlen "
+            "bestehen, z. B. 21-15-9."
+        )
+        return value
+
+    if (
+        not rep_scheme
+        or any(rep <= 0 for rep in rep_scheme)
+    ):
+        st.warning(
+            f"„{label}“ darf nur positive "
+            "Wiederholungszahlen enthalten."
+        )
+        return value
+
+    return rep_scheme
 
 def render_workout_editor(
     parsed_workout: Any,
@@ -846,6 +1149,11 @@ def render_workout_editor(
                 key=f"edit_rounds_{segment_index}",
                 step=1,
             )
+            rep_scheme = optional_rep_scheme_input(
+                "Wiederholungsschema",
+                getattr(segment, "rep_scheme", None),
+                key=f"edit_rep_scheme_{segment_index}",
+            )
             time_cap = optional_number_input(
                 "Time Cap (Min.)",
                 segment.time_cap_minutes,
@@ -862,6 +1170,7 @@ def render_workout_editor(
                 "name": segment_name.strip() or None,
                 "type": segment_type.strip() or "unknown",
                 "rounds": rounds,
+                "rep_scheme": rep_scheme,
                 "time_cap_minutes": time_cap,
                 "notes": segment_notes.strip() or None,
             }
@@ -931,11 +1240,39 @@ def render_workout_editor(
                             key=f"edit_distance_unit_{segment_index}_{element_index}",
                         )
 
-                    duration = optional_number_input(
+                    pace_col, speed_col = st.columns(2)
+                    with pace_col:
+                        pace = st.text_input(
+                            "Pace",
+                            value=str(getattr(element, "pace", None) or ""),
+                            placeholder="z. B. 5:00",
+                            key=f"edit_pace_{segment_index}_{element_index}",
+                        )
+                        pace_unit = st.text_input(
+                            "Pace-Einheit",
+                            value=str(getattr(element, "pace_unit", None) or ""),
+                            placeholder="min/km",
+                            key=f"edit_pace_unit_{segment_index}_{element_index}",
+                        )
+
+                    with speed_col:
+                        speed = optional_number_input(
+                            "Geschwindigkeit",
+                            getattr(element, "speed", None),
+                            key=f"edit_speed_{segment_index}_{element_index}",
+                            step=0.1,
+                        )
+                        speed_unit = st.text_input(
+                            "Geschwindigkeitseinheit",
+                            value=str(getattr(element, "speed_unit", None) or ""),
+                            placeholder="km/h",
+                            key=f"edit_speed_unit_{segment_index}_{element_index}",
+                        )
+
+                    duration = optional_duration_input(
                         "Dauer",
                         element.duration,
                         key=f"edit_duration_{segment_index}_{element_index}",
-                        step=1.0,
                     )
                     duration_unit = st.text_input(
                         "Dauereinheit",
@@ -964,6 +1301,10 @@ def render_workout_editor(
                         "weight_unit": weight_unit.strip() or None,
                         "distance": distance,
                         "distance_unit": distance_unit.strip() or None,
+                        "speed": speed,
+                        "speed_unit": speed_unit.strip() or None,
+                        "pace": pace.strip() or None,
+                        "pace_unit": pace_unit.strip() or None,
                         "duration": duration,
                         "duration_unit": duration_unit.strip() or None,
                         "calories": calories,
@@ -1015,6 +1356,7 @@ def render_workout_editor(
         segment.name = values["name"]
         segment.type = values["type"]
         segment.rounds = values["rounds"]
+        segment.rep_scheme = values["rep_scheme"]
         segment.time_cap_minutes = values["time_cap_minutes"]
         segment.notes = values["notes"]
 
@@ -1036,6 +1378,10 @@ def render_workout_editor(
             element.intensity.weight_unit = values["weight_unit"]
             element.distance = values["distance"]
             element.distance_unit = values["distance_unit"]
+            element.speed = values["speed"]
+            element.speed_unit = values["speed_unit"]
+            element.pace = values["pace"]
+            element.pace_unit = values["pace_unit"]
             element.duration = values["duration"]
             element.duration_unit = values["duration_unit"]
             element.calories = values["calories"]
@@ -1312,15 +1658,30 @@ with header_action_col:
         help="Training per Foto oder Text erfassen",
     ):
         st.session_state["workout_entry_requested"] = True
+
+        # Globale Navigation direkt zur Eingabemaske führen.
+        st.session_state["main_navigation"] = "🧠 Mein Coach"
+        st.session_state["coach_navigation"] = "Übersicht"
+
         st.rerun()
 
 # ============================================================
 # HAUPTNAVIGATION
 # ============================================================
 
-main_coach, main_training = st.tabs(["🧠 Mein Coach", "🏋️ Training"])
+main_coach, main_training = st.tabs(
+    ["🧠 Mein Coach", "🏋️ Training"],
+    key="main_navigation",
+    on_change="rerun",
+)
+
 with main_coach:
-    tab0, tab4, tab2 = st.tabs(["Übersicht", "Analyse", "Einordnung"])
+    tab0, tab4, tab2 = st.tabs(
+        ["Übersicht", "Analyse", "Einordnung"],
+        key="coach_navigation",
+        on_change="rerun",
+    )
+
 tab3 = main_training
 
 # ============================================================
@@ -1621,7 +1982,7 @@ with tab0:
                     try:
                         if (
                             input_type
-                            == "Foto hochladen / machen"
+                            == "📷 Foto"
                         ):
                             parsed_workout = parse_workout(
                                 image_data=photo.getvalue(),
@@ -2319,22 +2680,23 @@ with tab2:
 
                 try:
                     existing_data = st.session_state.get("history_cache")
+
                     if existing_data is None:
-                        existing_data = read_workout_history(
-                            conn=conn, spreadsheet_url=SHEET_URL, worksheet_name=WORKSHEET_NAME, columns=SHEET_COLUMNS
+                        existing_data = pd.DataFrame(
+                            columns=SHEET_COLUMNS
                         )
+
+                    append_workout_history(
+                        conn=conn,
+                        spreadsheet_url=SHEET_URL,
+                        worksheet_name=WORKSHEET_NAME,
+                        dataframe=new_entry,
+                        columns=SHEET_COLUMNS,
+                    )
 
                     updated_data = pd.concat(
                         [existing_data, new_entry],
                         ignore_index=True,
-                    )
-
-                    write_workout_history(
-                        conn=conn,
-                        spreadsheet_url=SHEET_URL,
-                        worksheet_name=WORKSHEET_NAME,
-                        dataframe=updated_data,
-                        columns=SHEET_COLUMNS,
                     )
                 except Exception as exc:
                     st.session_state["save_notice"] = {
