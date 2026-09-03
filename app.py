@@ -3277,11 +3277,37 @@ with tab3:
 # ============================================================
 
 with tab4:
+    # ----------------------------------------------------
+    # ANALYSE-DATEN DIREKT AUS DER GESPEICHERTEN HISTORIE
+    # ----------------------------------------------------
+    #
+    # Der Analyse-Tab darf nicht davon abhängen, ob Variablen zuvor in
+    # einem anderen Tab erzeugt wurden. Streamlit führt zwar das Skript
+    # komplett aus, aber einzelne Codepfade können übersprungen werden.
+    # Deshalb werden Trends und Trainingsbalance hier lokal aufgebaut.
+    analysis_user_name = st.session_state.get("athleten_name", "").strip()
+    analysis_user_sport = st.session_state.get("sportart", "")
+
+    analysis_history = _filter_cached_history(
+        st.session_state.get("history_cache"),
+        analysis_user_name,
+        days=90,
+    )
+
+    analysis_trend_analysis = build_trends(analysis_history)
+    training_balance = build_training_balance(
+        analysis_trend_analysis,
+        primary_goal=analysis_user_sport,
+    )
+
+    analysis_trend_block = analysis_trend_analysis.get("trends", {})
+    load_trend = analysis_trend_block.get("load", {})
+    frequency_trend = analysis_trend_block.get("frequency", {})
+    rpe_trend = analysis_trend_block.get("rpe", {})
+
     analysis_readiness = st.session_state.get("status_readiness")
     if isinstance(analysis_readiness, dict) and analysis_readiness:
         render_readiness_card(analysis_readiness)
-
-
 
         # ----------------------------------------------------
         # ENTWICKLUNG
@@ -3331,7 +3357,7 @@ with tab4:
     # Die 28-Tage-Analyse basiert auf der gespeicherten Historie.
     # Ein neu eingegebenes Workout ist dafür nicht erforderlich.
     analysis_history_available = (
-        "training_balance" in locals()
+        not analysis_history.empty
         and isinstance(training_balance, dict)
         and bool(training_balance)
     )
@@ -3495,7 +3521,7 @@ with tab4:
         # Nur für CrossFit-Athleten, dort immer sichtbar
         # ----------------------------------------------------
 
-        if str(user_sport).strip().casefold() == "crossfit":
+        if str(analysis_user_sport).strip().casefold() == "crossfit":
             crossfit_items = training_balance.get(
                 "crossfit_movements",
                 [],
