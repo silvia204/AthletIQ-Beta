@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
+from dataclasses import asdict
 
 import pandas as pd
 from PIL import Image
@@ -1729,18 +1730,34 @@ with tab0:
                         volume_data = {}
 
                     latest_analysis = DeterministicAnalysis(
-                        bewegungsmuster=json_loads_from_sheet(latest_for_coach.get("bewegungsmuster_json")) or {},
-                        muskelgruppen=json_loads_from_sheet(latest_for_coach.get("muskelgruppen_json")) or {},
-                        movements=json_loads_from_sheet(latest_for_coach.get("crossfit_movements_json")) or {},
+                        bewegungsmuster=json_loads_from_sheet(
+                            latest_for_coach.get("bewegungsmuster_json")
+                        ) or {},
+                        muskelgruppen=json_loads_from_sheet(
+                            latest_for_coach.get("muskelgruppen_json")
+                        ) or {},
+                        movements=json_loads_from_sheet(
+                            latest_for_coach.get("crossfit_movements_json")
+                        ) or {},
+                        trainingsziele=json_loads_from_sheet(
+                            latest_for_coach.get("trainingsziele_json")
+                        ) or {},
+                        belastungsarten=json_loads_from_sheet(
+                            latest_for_coach.get("belastungsarten_json")
+                        ) or {},
                         trainingsvolumen=TrainingVolume(
-                            **{key: value for key, value in volume_data.items()
-                               if key in TrainingVolume.__dataclass_fields__}
+                            **{
+                                key: value
+                                for key, value in volume_data.items()
+                                if key in TrainingVolume.__dataclass_fields__
+                            }
                         ),
                     )
+
                     latest_interpretation = WorkoutInterpretation(
-                        trainingsziele=json_loads_from_sheet(latest_for_coach.get("trainingsziele_json")) or {},
-                        belastungsarten=json_loads_from_sheet(latest_for_coach.get("belastungsarten_json")) or {},
-                        klassifikation=json_loads_from_sheet(latest_for_coach.get("klassifikation_json")) or {},
+                        klassifikation=json_loads_from_sheet(
+                            latest_for_coach.get("klassifikation_json")
+                        ) or {},
                     )
 
                     # parsed_workout bleibt bei History-Kontext bewusst leer. Es wird
@@ -2436,11 +2453,6 @@ with tab2:
                 # AUSFÜHRLICHE COACH-EINORDNUNG
                 # --------------------------------------------
 
-                print(
-                    "\n>>> APP DEBUG: "
-                    "build_coach_feedback WIRD JETZT AUFGERUFEN <<<\n"
-                )
-
                 try:
                     coach_result = build_coach_feedback(
                         training_analysis=training_analysis,
@@ -2464,11 +2476,6 @@ with tab2:
                         "readiness_summary",
                         "",
                     )
-
-                    print("\n" + "=" * 80)
-                    print("READINESS SUMMARY DEBUG")
-                    print(readiness_summary)
-                    print("=" * 80 + "\n")
 
                 except RuntimeError as exc:
                     print(
@@ -2659,13 +2666,13 @@ with tab2:
                                 )
                             ),
                             "trainingsziele_json": json_dumps_for_sheet(
-                                workout_interpretation.trainingsziele
+                                deterministic_analysis.trainingsziele
                             ),
                             "belastungsarten_json": json_dumps_for_sheet(
-                                workout_interpretation.belastungsarten
+                                deterministic_analysis.belastungsarten
                             ),
                             "trainingsvolumen_json": json_dumps_for_sheet(
-                                deterministic_analysis.trainingsvolumen
+                                asdict(deterministic_analysis.trainingsvolumen)
                             ),
                             "klassifikation_json": json_dumps_for_sheet(
                                 workout_interpretation.klassifikation
@@ -3274,6 +3281,47 @@ with tab4:
     if isinstance(analysis_readiness, dict) and analysis_readiness:
         render_readiness_card(analysis_readiness)
 
+
+
+        # ----------------------------------------------------
+        # ENTWICKLUNG
+        # ----------------------------------------------------
+
+        st.markdown("### Entwicklung")
+        st.caption(
+            "Vergleich der letzten 14 Tage mit den vorherigen 14 Tagen. "
+            "Der Belastungsverlauf darunter zeigt die letzten 28 Tage."
+        )
+
+        trend_col1, trend_col2, trend_col3 = st.columns(3)
+
+        trend_col1.metric(
+            "Belastung",
+            load_trend.get("text", "Noch nicht bewertbar"),
+            (
+                f"{load_trend.get('change_percent'):+.1f} %"
+                if load_trend.get("change_percent") is not None
+                else None
+            ),
+        )
+
+        trend_col2.metric(
+            "Trainingshäufigkeit",
+            frequency_trend.get("text", "Noch nicht bewertbar"),
+            f"{frequency_trend.get('current_sessions', 0)} Einheiten",
+        )
+
+        trend_col3.metric(
+            "Intensität",
+            rpe_trend.get("text", "Noch nicht bewertbar"),
+            (
+                f"Ø RPE {rpe_trend.get('current_value', 0):.1f}"
+                if float(rpe_trend.get("current_value", 0) or 0) > 0
+                else None
+            ),
+        )
+
+
     st.subheader("Analyse deiner letzten 28 Tage")
     st.caption(
         "So verteilt sich dein Training über Bewegungsmuster, Muskelgruppen, "
@@ -3328,13 +3376,13 @@ with tab4:
                     for item in movement_items
                 ])
                 donut_spec = {
-                    "mark": {"type": "arc", "innerRadius": 62, "outerRadius": 105},
+                    "mark": {"type": "arc", "innerRadius": 40, "outerRadius": 95},
                     "encoding": {
                         "theta": {"field": "Anteil", "type": "quantitative", "stack": True},
                         "color": {
                             "field": "Bewegungsmuster",
                             "type": "nominal",
-                            "legend": {"orient": "bottom", "title": None, "columns": 2},
+                            "legend": {"orient": "bottom", "title": None, "columns": 4},
                         },
                         "tooltip": [
                             {"field": "Bewegungsmuster", "type": "nominal"},
@@ -3342,7 +3390,7 @@ with tab4:
                         ],
                     },
                     "view": {"stroke": None},
-                    "height": 300,
+                    "height": 340,
                 }
                 st.vega_lite_chart(movement_chart, donut_spec, width="stretch")
                 with st.expander("Details anzeigen", expanded=False):
@@ -3415,130 +3463,104 @@ with tab4:
         # AUFFÄLLIGKEITEN
         # ----------------------------------------------------
 
-        st.markdown("### Auffälligkeiten")
-        st.caption(
-            "Hier erscheinen nur relevante Abweichungen im aktuellen "
-            "Trainingsmix. Die vollständigen Einzelwerte findest du über "
-            "‚Details anzeigen‘ direkt an den Grafiken."
-        )
+        # st.markdown("### Auffälligkeiten")
+        # st.caption(
+        #     "Hier erscheinen nur relevante Abweichungen im aktuellen "
+        #     "Trainingsmix. Die vollständigen Einzelwerte findest du über "
+        #     "‚Details anzeigen‘ direkt an den Grafiken."
+        # )
 
-        if balance_findings:
-            finding_columns = st.columns(2, gap="large")
-            for index, finding in enumerate(balance_findings[:6]):
-                with finding_columns[index % 2]:
-                    st.markdown(
-                        f"""
-                        <div class="finding-card">
-                            <div class="muted-label">TRAININGSBALANCE</div>
-                            <strong>{html.escape(str(finding.get('title', 'Hinweis')))}</strong>
-                            <div>{html.escape(str(finding.get('text', '')))}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-        else:
-            st.success(
-                "Die erfassten Trainingsbestandteile liegen aktuell "
-                "innerhalb der hinterlegten Zielkorridore."
-            )
-
-        # CrossFit bleibt eine sportartspezifische Vertiefung und nimmt
-        # deshalb keinen permanenten Platz in der allgemeinen Analyse ein.
-        crossfit_items = training_balance.get("crossfit_movements", [])
-        if str(user_sport).casefold() == "crossfit" and crossfit_items:
-            with st.expander("CrossFit Skills · Details anzeigen", expanded=False):
-                render_crossfit_movements(crossfit_items, max_rows=15)
+        # if balance_findings:
+        #     finding_columns = st.columns(2, gap="large")
+        #     for index, finding in enumerate(balance_findings[:6]):
+        #         with finding_columns[index % 2]:
+        #             st.markdown(
+        #                 f"""
+        #                 <div class="finding-card">
+        #                     <div class="muted-label">TRAININGSBALANCE</div>
+        #                     <strong>{html.escape(str(finding.get('title', 'Hinweis')))}</strong>
+        #                     <div>{html.escape(str(finding.get('text', '')))}</div>
+        #                 </div>
+        #                 """,
+        #                 unsafe_allow_html=True,
+        #             )
+        # else:
+        #     st.success(
+        #         "Die erfassten Trainingsbestandteile liegen aktuell "
+        #         "innerhalb der hinterlegten Zielkorridore."
+        #     )
 
         # ----------------------------------------------------
-        # ENTWICKLUNG
+        # CROSSFIT SKILLS
+        # Nur für CrossFit-Athleten, dort immer sichtbar
         # ----------------------------------------------------
 
-        st.markdown("### Entwicklung")
-        st.caption(
-            "Vergleich der letzten 14 Tage mit den vorherigen 14 Tagen. "
-            "Der Belastungsverlauf darunter zeigt die letzten 28 Tage."
-        )
-
-        trend_col1, trend_col2, trend_col3 = st.columns(3)
-
-        trend_col1.metric(
-            "Belastung",
-            load_trend.get("text", "Noch nicht bewertbar"),
-            (
-                f"{load_trend.get('change_percent'):+.1f} %"
-                if load_trend.get("change_percent") is not None
-                else None
-            ),
-        )
-
-        trend_col2.metric(
-            "Trainingshäufigkeit",
-            frequency_trend.get("text", "Noch nicht bewertbar"),
-            f"{frequency_trend.get('current_sessions', 0)} Einheiten",
-        )
-
-        trend_col3.metric(
-            "Intensität",
-            rpe_trend.get("text", "Noch nicht bewertbar"),
-            (
-                f"Ø RPE {rpe_trend.get('current_value', 0):.1f}"
-                if float(rpe_trend.get("current_value", 0) or 0) > 0
-                else None
-            ),
-        )
-
-        trend_detail_left, trend_detail_right = st.columns(2, gap="large")
-
-        with trend_detail_left:
-            st.markdown("##### Trainingsziele")
-            if goal_trends:
-                for item in goal_trends[:4]:
-                    st.write(f"{item.get('symbol', '•')} {item.get('text', '')}")
-            else:
-                st.caption("Noch keine klaren Veränderungen bei den Trainingszielen.")
-
-        with trend_detail_right:
-            st.markdown("##### Bewegungsmuster")
-            if movement_trends:
-                for item in movement_trends[:4]:
-                    st.write(f"{item.get('symbol', '•')} {item.get('text', '')}")
-            else:
-                st.caption("Noch keine klaren Veränderungen bei den Bewegungsmustern.")
-
-        st.markdown("#### Belastungsverlauf · 28 Tage")
-
-        chart_history = training_history.copy()
-        if not chart_history.empty:
-            timestamp_column = (
-                "zeitstempel_parsed"
-                if "zeitstempel_parsed" in chart_history.columns
-                else "zeitstempel"
-            )
-            chart_history["dashboard_date"] = pd.to_datetime(
-                chart_history[timestamp_column], errors="coerce", utc=True
-            )
-            chart_history["dashboard_score"] = pd.to_numeric(
-                chart_history.get("score", 0), errors="coerce"
-            ).fillna(0)
-
-            daily_load = (
-                chart_history
-                .dropna(subset=["dashboard_date"])
-                .assign(dashboard_date=lambda frame: frame["dashboard_date"].dt.date)
-                .groupby("dashboard_date", as_index=False)["dashboard_score"]
-                .sum()
-                .rename(columns={
-                    "dashboard_date": "zeitstempel",
-                    "dashboard_score": "Belastung",
-                })
-                .set_index("zeitstempel")
+        if str(user_sport).strip().casefold() == "crossfit":
+            crossfit_items = training_balance.get(
+                "crossfit_movements",
+                [],
             )
 
-            if not daily_load.empty:
-                st.line_chart(daily_load, width="stretch")
-            else:
-                st.info("Für den Belastungstrend fehlen gültige Datumswerte.")
-        else:
-            st.info(
-                "Der Belastungstrend erscheint nach dem ersten gespeicherten Workout."
+          #  st.markdown("### CrossFit Skills")
+
+            render_crossfit_movements(
+                crossfit_items,
+                max_rows=15,
             )
+
+
+        # trend_detail_left, trend_detail_right = st.columns(2, gap="large")
+
+        # with trend_detail_left:
+        #     st.markdown("##### Trainingsziele")
+        #     if goal_trends:
+        #         for item in goal_trends[:4]:
+        #             st.write(f"{item.get('symbol', '•')} {item.get('text', '')}")
+        #     else:
+        #         st.caption("Noch keine klaren Veränderungen bei den Trainingszielen.")
+
+        # with trend_detail_right:
+        #     st.markdown("##### Bewegungsmuster")
+        #     if movement_trends:
+        #         for item in movement_trends[:4]:
+        #             st.write(f"{item.get('symbol', '•')} {item.get('text', '')}")
+        #     else:
+        #         st.caption("Noch keine klaren Veränderungen bei den Bewegungsmustern.")
+
+        # st.markdown("#### Belastungsverlauf · 28 Tage")
+
+        # chart_history = training_history.copy()
+        # if not chart_history.empty:
+        #     timestamp_column = (
+        #         "zeitstempel_parsed"
+        #         if "zeitstempel_parsed" in chart_history.columns
+        #         else "zeitstempel"
+        #     )
+        #     chart_history["dashboard_date"] = pd.to_datetime(
+        #         chart_history[timestamp_column], errors="coerce", utc=True
+        #     )
+        #     chart_history["dashboard_score"] = pd.to_numeric(
+        #         chart_history.get("score", 0), errors="coerce"
+        #     ).fillna(0)
+
+        #     daily_load = (
+        #         chart_history
+        #         .dropna(subset=["dashboard_date"])
+        #         .assign(dashboard_date=lambda frame: frame["dashboard_date"].dt.date)
+        #         .groupby("dashboard_date", as_index=False)["dashboard_score"]
+        #         .sum()
+        #         .rename(columns={
+        #             "dashboard_date": "zeitstempel",
+        #             "dashboard_score": "Belastung",
+        #         })
+        #         .set_index("zeitstempel")
+        #     )
+
+        #     if not daily_load.empty:
+        #         st.line_chart(daily_load, width="stretch")
+        #     else:
+        #         st.info("Für den Belastungstrend fehlen gültige Datumswerte.")
+        # else:
+        #     st.info(
+        #         "Der Belastungstrend erscheint nach dem ersten gespeicherten Workout."
+        #     )

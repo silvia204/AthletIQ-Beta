@@ -32,6 +32,14 @@ from analyzers.trainingsvolumen import (
     analyze_trainingsvolumen,
 )
 
+from analyzers.trainingsziele import (
+    analyze_trainingsziele,
+)
+
+from analyzers.belastungsarten import (
+    analyze_belastungsarten,
+)
+
 
 def derive_deterministic_analysis(
     *,
@@ -60,6 +68,14 @@ def derive_deterministic_analysis(
     )
 
     result.trainingsvolumen = analyze_trainingsvolumen(
+        parsed_workout
+    )
+    
+    result.trainingsziele = analyze_trainingsziele(
+        parsed_workout
+    )
+
+    result.belastungsarten = analyze_belastungsarten(
         parsed_workout
     )
 
