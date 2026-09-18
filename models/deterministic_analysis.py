@@ -8,6 +8,7 @@ class DeterministicAnalysis:
     bewegungsmuster: dict[str, int] = field(default_factory=dict)
     muskelgruppen: dict[str, int] = field(default_factory=dict)
     movements: dict[str, int] = field(default_factory=dict)
+    hyrox_skills: dict[str, dict] = field(default_factory=dict)
     movement_categories: dict[str, int] = field(default_factory=dict)
     trainingsziele: dict[str, float] = field(default_factory=dict)      
     belastungsarten: dict[str, float] = field(default_factory=dict)

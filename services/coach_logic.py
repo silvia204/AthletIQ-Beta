@@ -162,13 +162,18 @@ def build_weekly_focus(
 ) -> dict[str, str]:
     """Return one supporting priority, never a weekly training plan."""
     findings = _findings(training_analysis)
-    crossfit_focus = build_crossfit_focus(
-        history_summary=history_summary,
-        training_analysis=training_analysis,
-    )
-
-    if crossfit_focus is not None:
-        return crossfit_focus
+    sport_key = str(primary_goal or "").strip().casefold()
+    if sport_key == "crossfit":
+        crossfit_focus = build_crossfit_focus(
+            history_summary=history_summary,
+            training_analysis=training_analysis,
+        )
+        if crossfit_focus is not None:
+            return crossfit_focus
+    if sport_key == "hyrox":
+        hyrox_focus = build_hyrox_focus(training_balance=training_balance)
+        if hyrox_focus is not None:
+            return hyrox_focus
     if training_balance:
         findings.extend(
             item
@@ -270,6 +275,49 @@ def build_positive_observations(
         positives.append("Die strukturierte Erfassung macht Abweichungen vom geplanten Training zunehmend sichtbar.")
 
     return positives[:3]
+
+
+def build_hyrox_focus(*, training_balance: dict[str, Any] | None) -> dict[str, str] | None:
+    """Return one HYROX-specific skill observation instead of generic movement coverage."""
+    if not training_balance:
+        return None
+    skills = [item for item in (training_balance.get("hyrox_skills", []) or []) if isinstance(item, dict)]
+    if not skills:
+        return None
+
+    # Prefer a race skill with no recent exposure. A zero-exposure skill is still
+    # shown because evaluate_skill_movements seeds all nine HYROX race skills.
+    ranked = sorted(
+        skills,
+        key=lambda item: (
+            float(item.get("value_14", 0) or 0) > 0,
+            float(item.get("value_28", 0) or 0) > 0,
+            float(item.get("share_14", 0) or 0),
+            str(item.get("label", "")),
+        ),
+    )
+    skill = ranked[0]
+    label = str(skill.get("label") or skill.get("key") or "HYROX Skill").strip()
+    value_14 = float(skill.get("value_14", 0) or 0)
+    value_28 = float(skill.get("value_28", 0) or 0)
+
+    if value_14 <= 0:
+        text = f"{label} wurde in den letzten 14 Tagen in keinem erfassten Workout erkannt."
+    else:
+        text = f"{label} kam in den letzten 14 Tagen nur in {int(value_14)} erfassten Workout{'s' if value_14 != 1 else ''} vor."
+
+    if value_28 <= 0:
+        reason = f"{label} ist aktuell der am wenigsten abgedeckte HYROX Skill. Direkte Stationsarbeit oder eine nahe Variante erhöht die Wettkampfspezifität."
+    else:
+        reason = f"Im Vergleich zu den übrigen HYROX Skills ist {label} zuletzt wenig vertreten. Eine passende Ergänzung ist nur sinnvoll, wenn dein bestehendes Programming dafür Spielraum lässt."
+
+    return {
+        "title": f"{label} gezielt berücksichtigen",
+        "text": text,
+        "session": f"Optional: {label} als kurze stationsspezifische Ergänzung in eine ohnehin geplante HYROX-Einheit integrieren.",
+        "recommendation_reason": reason,
+        "mode": "hyrox",
+    }
 
 def build_crossfit_focus(
     *,

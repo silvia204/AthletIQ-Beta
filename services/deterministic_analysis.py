@@ -27,6 +27,7 @@ from analyzers.muskelgruppen import (
 from analyzers.movements import (
     analyze_movements,
 )
+from analyzers.hyrox_skills import analyze_hyrox_skills
 
 from analyzers.trainingsvolumen import (
     analyze_trainingsvolumen,
@@ -64,6 +65,10 @@ def derive_deterministic_analysis(
     )
 
     result.movements = analyze_movements(
+        parsed_workout
+    )
+
+    result.hyrox_skills = analyze_hyrox_skills(
         parsed_workout
     )
 

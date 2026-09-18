@@ -127,6 +127,10 @@ class Movement:
 
     is_crossfit_movement: bool = False
 
+    # HYROX is modeled as a relation on neutral movements rather than as a
+    # separate movement database. Values: exact, close_variant, transfer.
+    hyrox_relations: Tuple[Tuple[str, str], ...] = ()
+
     notes: str = ""
 
     @property
@@ -382,6 +386,12 @@ def movement_patterns_to_classification(
         }
         for pattern in movement.movement_patterns
     ]
+
+
+def hyrox_relations_for_movement(movement: Movement) -> dict[str, str]:
+    """Return HYROX skill relations declared for a registry movement."""
+    return dict(movement.hyrox_relations)
+
 
 def movements_for_level(
     level: AthleteLevel,
@@ -689,6 +699,7 @@ register(
             MuscleGroup.SHOULDERS,
         ),
         is_crossfit_movement=True,
+        hyrox_relations=(("wall_ball", "transfer"),),
         notes="Tracks all thruster variations.",
     )
 )
@@ -706,6 +717,10 @@ register(
             "Heavy Wall Balls",
             "Wall Ball Shot",
             "Wall Ball Shots",
+            "Wallballs",
+            "Wallball",
+            "Wallball shot",
+            "Wallball shots",
         ),
         aliases=(
             "wall balls",
@@ -722,6 +737,7 @@ register(
             MuscleGroup.SHOULDERS,
         ),
         is_crossfit_movement=True,
+        hyrox_relations=(("wall_ball", "exact"),),
         notes="Tracks all wall ball variations.",
     )
 )
@@ -765,6 +781,7 @@ register(
             MuscleGroup.SHOULDERS,
         ),
         is_crossfit_movement=True,
+        hyrox_relations=(("burpee_broad_jump", "transfer"),),
     )
 )
 
@@ -837,6 +854,7 @@ register(
             MuscleGroup.BACK,
         ),
         is_crossfit_movement=True,
+        hyrox_relations=(("farmers_carry", "close_variant"),),
     )
 )
 
@@ -859,6 +877,12 @@ register(
             "DB Walking Lunges",
             "Dumbbell Walking Lunge",
             "Dumbbell Walking Lunges",
+            "Weighted Walking Lunge",
+            "Weighted Walking Lunges",
+            "Sandbag Lunge",
+            "Sandbag Lunges",
+            "Sandbag Walking Lunge",
+            "Sandbag Walking Lunges",
         ),
         aliases=(
             "walking lunge",
@@ -866,6 +890,9 @@ register(
             "forward lunge",
             "overhead lunge",
             "db walking lunge",
+            "weighted walking lunge",
+            "sandbag lunge",
+            "sandbag walking lunge",
         ),
         movement_patterns=(
             MovementPattern.LUNGE,
@@ -876,6 +903,7 @@ register(
             MuscleGroup.HAMSTRINGS,
         ),
         is_crossfit_movement=True,
+        hyrox_relations=(("sandbag_lunge", "transfer"),),
     )
 )
 
@@ -904,6 +932,7 @@ register(
             MuscleGroup.CALVES,
         ),
         is_crossfit_movement=False,
+        hyrox_relations=(("sled_push", "exact"), ("sled_pull", "exact")),
     )
 )
 
@@ -1627,6 +1656,7 @@ register(
             MuscleGroup.CALVES,
         ),
         is_crossfit_movement=True,
+        hyrox_relations=(("running", "exact"),),
         notes="All running variations.",
     )
 )
@@ -1658,6 +1688,7 @@ register(
             MuscleGroup.HAMSTRINGS,
         ),
         is_crossfit_movement=True,
+        hyrox_relations=(("row", "exact"),),
         notes="RowErg / Concept2 rowing.",
     )
 )
@@ -1685,6 +1716,7 @@ register(
             MuscleGroup.CORE,
         ),
         is_crossfit_movement=True,
+        hyrox_relations=(("ski_erg", "exact"),),
         notes="Concept2 SkiErg.",
     )
 )
@@ -1821,4 +1853,5 @@ __all__ = [
     "get_movement",
     "movements_for_level",
     "all_movements",
+    "hyrox_relations_for_movement",
 ]

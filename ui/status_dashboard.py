@@ -68,6 +68,7 @@ def render_status_dashboard(
     latest_workout_meta: str = "Coach-Einordnung verfügbar",
     trend_analysis: dict[str, Any] | None = None,
     recent_sessions: list[dict[str, Any]] | None = None,
+    primary_sport: str = "",
 ) -> None:
     label, css_class = _status_label(readiness)
     active_weeks = int(consistency.get("active_weeks", 0) or 0)
@@ -150,15 +151,16 @@ def render_status_dashboard(
         unsafe_allow_html=True,
     )
     if meaningful_focus:
+        sport_key = str(primary_sport or "").strip().casefold()
+        sport_add_on = {
+            "crossfit": "CrossFit-Ergänzung", "hyrox": "HYROX-Ergänzung",
+            "laufen": "Lauf-Ergänzung", "running": "Lauf-Ergänzung",
+        }.get(sport_key, "Mögliche Ergänzung")
         mode_label = {
-            "missing_component": "Mögliche Ergänzung",
-            "load_adjustment": "Belastung anpassen",
-            "small_add_on": "Optionale Ergänzung",
-            "crossfit": "CrossFit-Ergänzung",
-        }.get(
-            focus_mode,
-            "Mögliche Ergänzung",
-        )
+            "missing_component": sport_add_on, "load_adjustment": "Belastung anpassen",
+            "small_add_on": sport_add_on, "crossfit": "CrossFit-Ergänzung",
+            "hyrox": "HYROX-Ergänzung",
+        }.get(focus_mode, sport_add_on)
 
         recommendation_html = (
             '<div class="supplement-session"><strong>Konkreter Vorschlag:</strong> '

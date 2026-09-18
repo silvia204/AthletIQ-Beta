@@ -43,6 +43,7 @@ DIMENSION_COLUMNS = {
     "muscle_groups": "muskelgruppen_json",
     "load_types": "belastungsarten_json",
     "crossfit_movements": "crossfit_movements_json",
+    "hyrox_skills": "hyrox_skills_json",
 }
 
 
@@ -882,6 +883,36 @@ def build_trend_summary(
     return unique_summary[:7]
 
 
+def aggregate_hyrox_skills(period: pd.DataFrame) -> dict[str, int]:
+    """Count one exposure per HYROX skill and workout from stored analysis JSON."""
+    counts: Counter[str] = Counter()
+    column = DIMENSION_COLUMNS["hyrox_skills"]
+    if period.empty or column not in period.columns:
+        return {}
+    for value in period[column].tolist():
+        data = json_loads_from_sheet(value, default={})
+        if not isinstance(data, dict):
+            continue
+        for skill, exposure in data.items():
+            if not str(skill).strip():
+                continue
+            if isinstance(exposure, dict):
+                def positive(key: str) -> bool:
+                    try:
+                        return float(exposure.get(key, 0) or 0) > 0
+                    except (TypeError, ValueError):
+                        return False
+                active = any(positive(k) for k in ("exact", "close_variant", "transfer"))
+            else:
+                try:
+                    active = float(exposure or 0) > 0
+                except (TypeError, ValueError):
+                    active = False
+            if active:
+                counts[str(skill).strip()] += 1
+    return dict(counts)
+
+
 def build_window(
     history: pd.DataFrame,
     *,
@@ -943,6 +974,7 @@ def build_window(
                 ]
             ),
         ),
+        "hyrox_skills": aggregate_hyrox_skills(period),
     }
 
 def empty_trend_result(

@@ -110,6 +110,12 @@ DIMENSION_LABELS = {
         "neuromuscular": "Neuromuskuläre Belastung",
         "cyclic": "Zyklische Belastung",
     },
+    "hyrox_skills": {
+        "running": "Running", "ski_erg": "SkiErg", "sled_push": "Sled Push",
+        "sled_pull": "Sled Pull", "burpee_broad_jump": "Burpee Broad Jump",
+        "row": "Row", "farmers_carry": "Farmers Carry",
+        "sandbag_lunge": "Sandbag Lunges", "wall_ball": "Wall Balls",
+    },
 }
 
 # Zielbereiche sind Anteile am jeweiligen 28-Tage-Dimensionsvolumen.
@@ -508,15 +514,20 @@ def evaluate_dimension(
         key=lambda item: (-item["priority_score"], -item["share"], item["label"]),
     )
 
-def evaluate_crossfit_movements(
+def evaluate_skill_movements(
     *,
     counts_28: Mapping[str, Any],
     counts_14: Mapping[str, Any],
     previous_14: Mapping[str, Any],
     sessions_14: int,
     previous_sessions_14: int,
+    dimension: str = "crossfit_movements",
 ) -> list[dict[str, Any]]:
     keys = set(counts_28) | set(counts_14) | set(previous_14)
+    if dimension == "hyrox_skills":
+        # HYROX has a fixed race structure. Seed all nine skills so missing
+        # stations remain visible instead of disappearing from the analysis.
+        keys |= set(DIMENSION_LABELS.get("hyrox_skills", {}))
 
     rows: list[dict[str, Any]] = []
 
@@ -547,7 +558,7 @@ def evaluate_crossfit_movements(
 
         rows.append({
             "key": key,
-            "label": _label("crossfit_movements", key),
+            "label": _label(dimension, key),
             "value_28": round(value_28, 2),
 
             "value_14": round(value_14, 2),
@@ -675,12 +686,21 @@ def build_training_balance(
             sessions_28 - sessions_14,
         )
 
-        result["crossfit_movements"] = evaluate_crossfit_movements(
+        result["crossfit_movements"] = evaluate_skill_movements(
             counts_28=crossfit_28,
             counts_14=crossfit_14,
             previous_14=crossfit_previous_14,
             sessions_14=sessions_14,
             previous_sessions_14=previous_sessions_14,
+        )
+
+        hyrox_28 = window_28.get("hyrox_skills", {}) or {}
+        hyrox_14 = window_14.get("hyrox_skills", {}) or {}
+        hyrox_previous_14 = _previous_14_counts(window_28, window_14, "hyrox_skills")
+        result["hyrox_skills"] = evaluate_skill_movements(
+            counts_28=hyrox_28, counts_14=hyrox_14, previous_14=hyrox_previous_14,
+            sessions_14=sessions_14, previous_sessions_14=previous_sessions_14,
+            dimension="hyrox_skills",
         )
 
 

@@ -278,6 +278,7 @@ SHEET_COLUMNS = [
     "trainingsvolumen_json",
     "klassifikation_json",
     "crossfit_movements_json",
+    "hyrox_skills_json",
 ]
 
 
@@ -289,6 +290,9 @@ DEFAULT_SESSION_STATE = {
     "athleten_name": "",
     "sportart": "",
     "athleten_level": "",
+    "hyrox_category": "",
+    "hyrox_division": "",
+    "hyrox_format": "",
     "user_profile_loaded": False,
     "verletzungen": "",
     "workout_kommentar": "",
@@ -402,7 +406,7 @@ def read_user_profiles(
     Liest das Tabellenblatt mit den Athletenprofilen.
 
     Erwartete Spalten:
-    username, goal, level
+    username, goal, level; optional: hyrox_category, hyrox_division, hyrox_format
     """
 
     profiles = conn.read(
@@ -417,6 +421,9 @@ def read_user_profiles(
                 "username",
                 "goal",
                 "level",
+                "hyrox_category",
+                "hyrox_division",
+                "hyrox_format",
             ]
         )
 
@@ -447,11 +454,18 @@ def read_user_profiles(
             f"{missing_text}."
         )
 
+    for optional_column in ("hyrox_category", "hyrox_division", "hyrox_format"):
+        if optional_column not in profiles.columns:
+            profiles[optional_column] = ""
+
     profiles = profiles[
         [
             "username",
             "goal",
             "level",
+            "hyrox_category",
+            "hyrox_division",
+            "hyrox_format",
         ]
     ].copy()
 
@@ -554,12 +568,19 @@ def get_user_profile(
             "und Advanced."
         )
 
+    hyrox_category = str(row.get("hyrox_category") or "").strip()
+    hyrox_division = str(row.get("hyrox_division") or "").strip()
+    hyrox_format = str(row.get("hyrox_format") or "").strip()
+
     return {
         "username": str(
             row.get("username")
         ).strip(),
         "goal": goal,
         "level": level,
+        "hyrox_category": hyrox_category,
+        "hyrox_division": hyrox_division,
+        "hyrox_format": hyrox_format,
     }
 
 
@@ -729,6 +750,22 @@ def render_crossfit_movements(
         "vorkam · letzte 14 Tage im Vergleich zu den vorherigen 14 Tagen."
     )
 
+
+
+def render_hyrox_skills(items: list[dict[str, Any]], *, max_rows: int = 15) -> None:
+    """Rendert HYROX-Skills als relativen 14-Tage-Historienvergleich."""
+    st.markdown("##### HYROX Skills")
+    if not items:
+        st.info("In diesem Zeitraum wurden keine HYROX Skills erkannt.")
+        return
+    table = pd.DataFrame([{
+        "HYROX Skill": item.get("label", "–"),
+        "Letzte 14 T.": f"{int(float(item.get('value_14', 0)))} / {int(item.get('sessions_14', 0))} · {float(item.get('share_14_percent', 0)):.1f} %",
+        "Vorherige 14 T.": f"{int(float(item.get('previous_14', 0)))} / {int(item.get('previous_sessions_14', 0))} · {float(item.get('previous_share_14_percent', 0)):.1f} %",
+        "Trend": f"{item.get('trend_symbol', '→')} " + (f"{float(item['trend_change_percent']):+.1f} %" if item.get("trend_change_percent") is not None else "neu / keine Basis"),
+    } for item in items[:max_rows]])
+    st.dataframe(table, hide_index=True, width="stretch")
+    st.caption("Anteil der Workouts, in denen der jeweilige HYROX Skill oder eine zugeordnete Variante vorkam · letzte 14 Tage im Vergleich zu den vorherigen 14 Tagen.")
 
 def format_workout_element_details(
     element: Any,
@@ -1619,6 +1656,9 @@ if user_profile is not None:
     st.session_state["athleten_name"] = user_name
     st.session_state["sportart"] = sportart
     st.session_state["athleten_level"] = level
+    st.session_state["hyrox_category"] = user_profile.get("hyrox_category", "")
+    st.session_state["hyrox_division"] = user_profile.get("hyrox_division", "")
+    st.session_state["hyrox_format"] = user_profile.get("hyrox_format", "")
     st.session_state["user_profile_loaded"] = True
 
     # Google Sheets nur einmal pro Athlet/Sitzung lesen. Alle Views arbeiten
@@ -1635,12 +1675,22 @@ if user_profile is not None:
             profile_error = f"Die Trainingshistorie konnte nicht geladen werden: {exc}"
 
     with header_name_col:
-        st.caption(f"{sportart} · {level}")
+        hyrox_bits = [
+            user_profile.get("hyrox_format", ""),
+            user_profile.get("hyrox_category", ""),
+            user_profile.get("hyrox_division", ""),
+        ] if sportart == "Hyrox" else []
+        hyrox_label = " · ".join(bit for bit in hyrox_bits if bit)
+        suffix = f" · {hyrox_label}" if hyrox_label else ""
+        st.caption(f"{sportart} · {level}{suffix}")
 else:
     sportart = ""
     level = ""
     st.session_state["sportart"] = ""
     st.session_state["athleten_level"] = ""
+    st.session_state["hyrox_category"] = ""
+    st.session_state["hyrox_division"] = ""
+    st.session_state["hyrox_format"] = ""
     st.session_state["user_profile_loaded"] = False
     if profile_error:
         st.error(profile_error)
@@ -1870,6 +1920,7 @@ with tab0:
                 latest_workout_meta=latest_meta,
                 trend_analysis=trend_analysis,
                 recent_sessions=recent_sessions,
+                primary_sport=sportart,
             )
 # ============================================================
 # TAB 1: WORKOUT EINTRAGEN
@@ -2682,6 +2733,9 @@ with tab2:
                             ),
                             "crossfit_movements_json": json_dumps_for_sheet(
                                 deterministic_analysis.movements
+                            ),
+                            "hyrox_skills_json": json_dumps_for_sheet(
+                                deterministic_analysis.hyrox_skills
                             ),
                         }
                     ],
@@ -3536,6 +3590,10 @@ with tab4:
                 crossfit_items,
                 max_rows=15,
             )
+
+        elif str(analysis_user_sport).strip().casefold() == "hyrox":
+            hyrox_items = training_balance.get("hyrox_skills", [])
+            render_hyrox_skills(hyrox_items, max_rows=9)
 
 
         # trend_detail_left, trend_detail_right = st.columns(2, gap="large")
