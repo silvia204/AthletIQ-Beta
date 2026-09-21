@@ -278,25 +278,47 @@ def build_positive_observations(
 
 
 def build_hyrox_focus(*, training_balance: dict[str, Any] | None) -> dict[str, str] | None:
-    """Return one HYROX-specific skill observation instead of generic movement coverage."""
+    """Summarise HYROX skill coverage without prescribing a replacement programme."""
     if not training_balance:
         return None
     skills = [item for item in (training_balance.get("hyrox_skills", []) or []) if isinstance(item, dict)]
     if not skills:
         return None
 
-    # Prefer a race skill with no recent exposure. A zero-exposure skill is still
-    # shown because evaluate_skill_movements seeds all nine HYROX race skills.
-    ranked = sorted(
-        skills,
-        key=lambda item: (
-            float(item.get("value_14", 0) or 0) > 0,
-            float(item.get("value_28", 0) or 0) > 0,
-            float(item.get("share_14", 0) or 0),
-            str(item.get("label", "")),
-        ),
-    )
-    skill = ranked[0]
+    missing = [item for item in skills if float(item.get("value_14", 0) or 0) <= 0]
+
+    # When several race skills are absent, a single arbitrary station should not
+    # be presented as the priority. Point the athlete to the detailed coverage
+    # instead; their existing programming still determines what to add next.
+    if len(missing) >= 2:
+        return {
+            "title": "Mehrere HYROX Skills zuletzt nicht abgedeckt",
+            "text": (
+                f"{len(missing)} von 9 HYROX Skills wurden in den letzten 14 Tagen "
+                "in keinem erfassten Workout erkannt."
+            ),
+            "session": "Die einzelnen Skills und ihre Entwicklung findest du in der HYROX-Skill-Übersicht unter Analyse.",
+            "recommendation_reason": (
+                "Die aktuelle HYROX-Abdeckung ist auf mehrere Skills verteilt lückenhaft. "
+                "Statt eine einzelne Station willkürlich zu priorisieren, prüfe die Details "
+                "und gleiche sie mit deinem bestehenden Programming ab."
+            ),
+            "mode": "hyrox",
+        }
+
+    # With exactly one missing skill, that gap is specific enough to surface.
+    if len(missing) == 1:
+        skill = missing[0]
+    else:
+        skill = min(
+            skills,
+            key=lambda item: (
+                float(item.get("share_14", 0) or 0),
+                float(item.get("value_28", 0) or 0),
+                str(item.get("label", "")),
+            ),
+        )
+
     label = str(skill.get("label") or skill.get("key") or "HYROX Skill").strip()
     value_14 = float(skill.get("value_14", 0) or 0)
     value_28 = float(skill.get("value_28", 0) or 0)

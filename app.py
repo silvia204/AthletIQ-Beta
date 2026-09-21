@@ -318,6 +318,11 @@ DEFAULT_SESSION_STATE = {
     "profiles_cache": None,
     "history_cache": None,
     "history_cache_athlete": None,
+    # Wird beim Öffnen einer neuen Trainingseingabe bzw. nach erfolgreichem
+    # Speichern gesetzt. Die eigentlichen Widget-States werden erst vor dem
+    # Rendern der Widgets zurückgesetzt (Streamlit erlaubt das nicht mehr,
+    # nachdem ein Widget mit demselben Key im aktuellen Run erzeugt wurde).
+    "reset_training_inputs": False,
     "main_navigation": "🧠 Mein Coach",
     "coach_navigation": "Übersicht",
 }
@@ -361,9 +366,6 @@ else:
 ALLOWED_GOALS = {
     "crossfit": "CrossFit",
     "hyrox": "Hyrox",
-    "running": "Running",
-    "run": "Running",
-    "laufen": "Running",
     "general fitness": "General Fitness",
     "general_fitness": "General Fitness",
     "abnehmen": "Abnehmen",
@@ -556,7 +558,7 @@ def get_user_profile(
         raise ValueError(
             "Ungültiges Ziel für "
             f"„{username}“: {row.get('goal')}. "
-            "Erlaubt sind CrossFit, Hyrox, Running, "
+            "Erlaubt sind CrossFit, Hyrox, "
             "General Fitness und Abnehmen."
         )
 
@@ -749,7 +751,6 @@ def render_crossfit_movements(
         "Anteil der Workouts, in denen der jeweilige CrossFit Skill "
         "vorkam · letzte 14 Tage im Vergleich zu den vorherigen 14 Tagen."
     )
-
 
 
 def render_hyrox_skills(items: list[dict[str, Any]], *, max_rows: int = 15) -> None:
@@ -1038,8 +1039,6 @@ def optional_duration_input(
         "oder 1 h 15 min."
     )
     return value
-
-
 def optional_number_input(
     label: str,
     value: int | float | None,
@@ -1712,6 +1711,8 @@ with header_action_col:
         help="Training per Foto oder Text erfassen",
     ):
         st.session_state["workout_entry_requested"] = True
+        # Jede neue Trainingseingabe startet mit neutralen Eingabefeldern.
+        st.session_state["reset_training_inputs"] = True
 
         # Globale Navigation direkt zur Eingabemaske führen.
         st.session_state["main_navigation"] = "🧠 Mein Coach"
@@ -1818,17 +1819,11 @@ with tab0:
                     st.session_state["parsed_workout"] = None
                     st.session_state["deterministic_analysis"] = latest_analysis
                     st.session_state["workout_interpretation"] = latest_interpretation
-                    st.session_state["aktuelles_rpe"] = safely_convert_to_int(
-                        latest_for_coach.get("rpe"), default=7
-                    )
-                    st.session_state["trainingsdauer"] = safely_convert_to_int(
-                        latest_for_coach.get("dauer_minuten"), default=60
-                    )
+                    # RPE, Dauer und Kommentar sind reine Eingabefelder für
+                    # das nächste Training und werden nicht aus der Historie
+                    # zurück in die Eingabemaske übernommen.
                     st.session_state["verletzungen"] = str(
                         latest_for_coach.get("verletzungen", "") or ""
-                    )
-                    st.session_state["workout_kommentar"] = str(
-                        latest_for_coach.get("kommentar", "") or ""
                     )
                     st.session_state["letzter_coach_text"] = str(
                         latest_for_coach.get("coach_feedback", "") or ""
@@ -1920,7 +1915,6 @@ with tab0:
                 latest_workout_meta=latest_meta,
                 trend_analysis=trend_analysis,
                 recent_sessions=recent_sessions,
-                primary_sport=sportart,
             )
 # ============================================================
 # TAB 1: WORKOUT EINTRAGEN
@@ -1938,7 +1932,7 @@ with tab0:
                 st.session_state["workout_entry_requested"] = False
                 st.rerun()
 
-        injuries = st.text_area(
+        injuries = st.text_input(
             "Aktuelle Einschränkungen oder Verletzungen",
             value=st.session_state[
                 "verletzungen"
@@ -2052,7 +2046,7 @@ with tab0:
                 ):
                     try:
                         if (
-                            input_type
+input_type
                             == "📷 Foto"
                         ):
                             parsed_workout = parse_workout(
@@ -2169,60 +2163,58 @@ with tab0:
                     "Wie hat es sich angefühlt?"
                 )
 
-                duration_minutes = (
-                    st.number_input(
-                        "Trainingsdauer in Minuten",
-                        min_value=1,
-                        max_value=600,
-                        value=int(
-                            st.session_state[
-                                "trainingsdauer"
-                            ]
-                        ),
-                        step=5,
-                    )
-                )
+                # Streamlit behält Widget-Werte über Reruns unabhängig vom
+                # `value`-Argument. Deshalb verwenden wir explizite Widget-Keys
+                # und setzen diese VOR dem Rendern zurück.
+                if st.session_state.get("reset_training_inputs", False):
+                    st.session_state["trainingsdauer"] = 1
+                    st.session_state["aktuelles_rpe"] = 1
+                    st.session_state["workout_kommentar"] = ""
+                    st.session_state["training_duration_input"] = 1
+                    st.session_state["training_rpe_input"] = 1
+                    st.session_state["training_comment_input"] = ""
+                    st.session_state["reset_training_inputs"] = False
 
-                st.session_state[
-                    "trainingsdauer"
-                ] = int(duration_minutes)
+                if "training_duration_input" not in st.session_state:
+                    st.session_state["training_duration_input"] = int(
+                        st.session_state.get("trainingsdauer", 1)
+                    )
+                if "training_rpe_input" not in st.session_state:
+                    st.session_state["training_rpe_input"] = int(
+                        st.session_state.get("aktuelles_rpe", 1)
+                    )
+                if "training_comment_input" not in st.session_state:
+                    st.session_state["training_comment_input"] = str(
+                        st.session_state.get("workout_kommentar", "") or ""
+                    )
+
+                duration_minutes = st.number_input(
+                    "Trainingsdauer in Minuten",
+                    min_value=1,
+                    max_value=600,
+                    step=5,
+                    key="training_duration_input",
+                )
+                st.session_state["trainingsdauer"] = int(duration_minutes)
 
                 rpe = st.slider(
-                    "Wie anstrengend war das Workout? "
-                    "RPE 1–10",
+                    "Wie anstrengend war das Workout? RPE 1–10",
                     min_value=1,
                     max_value=10,
-                    value=int(
-                        st.session_state[
-                            "aktuelles_rpe"
-                        ]
+                    key="training_rpe_input",
+                )
+                st.session_state["aktuelles_rpe"] = int(rpe)
+
+                workout_comment = st.text_input(
+                    "Kommentar zum Workout oder zur Tagesform",
+                    placeholder=(
+                        "z. B. Beine waren ab Runde 3 "
+                        "schwer, Puls ungewöhnlich hoch "
+                        "oder sehr gute Tagesform"
                     ),
+                    key="training_comment_input",
                 )
-
-                st.session_state[
-                    "aktuelles_rpe"
-                ] = int(rpe)
-
-                workout_comment = (
-                    st.text_area(
-                        "Kommentar zum Workout "
-                        "oder zur Tagesform",
-                        value=(
-                            st.session_state[
-                                "workout_kommentar"
-                            ]
-                        ),
-                        placeholder=(
-                            "z. B. Beine waren ab Runde 3 "
-                            "schwer, Puls ungewöhnlich hoch "
-                            "oder sehr gute Tagesform"
-                        ),
-                    )
-                )
-
-                st.session_state[
-                    "workout_kommentar"
-                ] = workout_comment.strip()
+                st.session_state["workout_kommentar"] = workout_comment.strip()
 
                 st.markdown("---")
                 st.subheader("💾 Training dauerhaft sichern")
@@ -2428,10 +2420,8 @@ with tab2:
             )
 
         if (
-            st.session_state.get(
-                "letzter_save_key"
-            )
-            is not None
+            st.session_state.get("letzter_save_key") is not None
+            and st.session_state.get("workout_entry_requested", False)
         ):
             training_history = (
                 remove_current_workout_from_history(
@@ -2772,14 +2762,28 @@ with tab2:
                     }
                 else:
                     st.session_state["letzter_save_key"] = current_save_key
-                    # Cache lokal mit dem gerade erfolgreich geschriebenen Stand aktualisieren.
-                    # Dadurch ist nach dem Speichern kein zusätzlicher Sheets-Read nötig.
-                    st.session_state["history_cache"] = updated_data.copy()
-                    st.session_state["history_cache_athlete"] = user_name.strip().casefold()
-                    # Erzwingt nach dem Speichern ein Neuladen des Coach-Kontexts
-                    # aus der aktualisierten Historie.
+
+                    # Nach erfolgreichem Speichern die komplette Historie beim
+                    # nächsten Rerun erneut aus Google Sheets laden. So basieren
+                    # Dashboard, Analyse und Coach sicher auf dem persistierten Stand.
+                    st.session_state["history_cache"] = None
+                    st.session_state["history_cache_athlete"] = None
+
+                    # Coach-Antwort und abgeleitete Coach-Daten genau einmal
+                    # invalidieren, damit sie mit der frisch geladenen Historie
+                    # neu berechnet werden.
                     st.session_state["coach_context_key"] = None
                     st.session_state["coach_context_source"] = None
+                    st.session_state["letzter_state_key"] = None
+                    st.session_state["letzter_coach_text"] = None
+                    st.session_state["letzte_daily_coach_tips"] = None
+                    st.session_state["letzte_trainingsanalyse"] = None
+
+                    # Eingabefelder erst im nächsten Run VOR dem Rendern
+                    # zurücksetzen. So werden auch die sichtbaren Streamlit-
+                    # Widgets zuverlässig auf Kommentar="", RPE=1, Dauer=1 gesetzt.
+                    st.session_state["reset_training_inputs"] = True
+
                     st.session_state["workout_entry_requested"] = False
                     st.session_state["save_notice"] = {
                         "type": "success",
@@ -3055,7 +3059,7 @@ with tab3:
                 st.write(
                     "**Gespeicherte Workouts:** "
                     f"{len(user_history)}"
-                )
+)
 
                 table_history = user_history.copy()
                 
@@ -3339,9 +3343,8 @@ with tab4:
     # ----------------------------------------------------
     #
     # Der Analyse-Tab darf nicht davon abhängen, ob Variablen zuvor in
-    # einem anderen Tab erzeugt wurden. Streamlit führt zwar das Skript
-    # komplett aus, aber einzelne Codepfade können übersprungen werden.
-    # Deshalb werden Trends und Trainingsbalance hier lokal aufgebaut.
+    # einem anderen Tab erzeugt wurden. Deshalb werden Trends und
+    # Trainingsbalance hier lokal aus der gespeicherten Historie aufgebaut.
     analysis_user_name = st.session_state.get("athleten_name", "").strip()
     analysis_user_sport = st.session_state.get("sportart", "")
 
@@ -3365,6 +3368,8 @@ with tab4:
     analysis_readiness = st.session_state.get("status_readiness")
     if isinstance(analysis_readiness, dict) and analysis_readiness:
         render_readiness_card(analysis_readiness)
+
+
 
         # ----------------------------------------------------
         # ENTWICKLUNG
@@ -3414,7 +3419,7 @@ with tab4:
     # Die 28-Tage-Analyse basiert auf der gespeicherten Historie.
     # Ein neu eingegebenes Workout ist dafür nicht erforderlich.
     analysis_history_available = (
-        not analysis_history.empty
+        "training_balance" in locals()
         and isinstance(training_balance, dict)
         and bool(training_balance)
     )
@@ -3574,8 +3579,8 @@ with tab4:
         #     )
 
         # ----------------------------------------------------
-        # CROSSFIT SKILLS
-        # Nur für CrossFit-Athleten, dort immer sichtbar
+        # CROSSFIT / HYROX SKILLS
+        # Profil entscheidet über die angezeigte Sportlogik.
         # ----------------------------------------------------
 
         if str(analysis_user_sport).strip().casefold() == "crossfit":
@@ -3583,8 +3588,6 @@ with tab4:
                 "crossfit_movements",
                 [],
             )
-
-          #  st.markdown("### CrossFit Skills")
 
             render_crossfit_movements(
                 crossfit_items,

@@ -183,6 +183,20 @@ def get_level_factor(level: str) -> float:
     return 1.00
 
 
+RPE_LOAD_FACTORS = {
+    1: 0.50,
+    2: 0.60,
+    3: 0.75,
+    4: 0.85,
+    5: 0.95,
+    6: 1.00,
+    7: 1.05,
+    8: 1.15,
+    9: 1.35,
+    10: 1.50,
+}
+
+
 def calculate_load_score(
     *,
     structural_score: int,
@@ -192,11 +206,21 @@ def calculate_load_score(
 ) -> int:
     """
     Kombiniert Session-RPE und strukturellen Workout-Wert.
+
+    Die RPE-Gewichtung ist bewusst progressiv:
+    niedrige RPE-Werte werden abgewertet, RPE 6 dient als
+    neutraler Referenzpunkt und sehr hohe RPE-Werte werden
+    überproportional gewichtet.
     """
 
     level_factor = get_level_factor(level)
+    rpe_factor = RPE_LOAD_FACTORS.get(rpe, 1.0)
 
-    session_rpe_load = duration_minutes * rpe
+    session_rpe_load = (
+        duration_minutes
+        * rpe
+        * rpe_factor
+    )
     structural_load = structural_score * 4
 
     return int(

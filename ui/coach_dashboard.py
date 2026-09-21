@@ -129,90 +129,168 @@ def _readiness_display(
         ),
     }
 
-def _readiness_signal_messages(
+def _readiness_signal_groups(
     readiness: dict[str, Any],
-) -> list[str]:
-    """
-    Liefert die konkreten Belastungssignale für die
-    Readiness-Anzeige.
-
-    Nur Overload-Signale werden hier dargestellt.
-    Untertrainingssignale gehören nicht zur aktuellen
-    Belastbarkeit.
-    """
-
+) -> dict[str, list[str]]:
+    """Gruppiert Readiness-Signale für eine kompakte, ursachenbezogene Anzeige."""
     signals = readiness.get("overload_signals") or []
 
-    messages: list[str] = []
+    load_type_labels = {
+        "high_mechanical_load": "Mechanisch",
+        "high_eccentric_load": "Exzentrisch",
+        "high_impact_load": "Impact",
+        "high_neuromuscular_load": "Neuromuskulär",
+    }
+    muscle_labels = {
+        "quadriceps": "Quadrizeps",
+        "hamstrings": "Hamstrings",
+        "calves": "Waden",
+        "glutes": "Glutes",
+        "chest": "Brust",
+        "back": "Rücken",
+        "shoulders": "Schultern",
+        "biceps": "Bizeps",
+        "triceps": "Trizeps",
+        "core": "Core",
+    }
+
+    warnings: list[str] = []
+    load_types: list[str] = []
+    muscles: list[str] = []
+    other_notices: list[str] = []
 
     for signal in signals:
         if not isinstance(signal, dict):
             continue
 
-        message = str(
-            signal.get("message") or ""
-        ).strip()
+        code = str(signal.get("code") or "").strip()
+        severity = str(signal.get("severity") or "").strip().casefold()
+        message = str(signal.get("message") or "").strip()
 
-        if message and message not in messages:
-            messages.append(message)
+        if severity == "warning":
+            if message and message not in warnings:
+                warnings.append(message)
+            continue
 
-    return messages
+        if code in load_type_labels:
+            label = load_type_labels[code]
+            if label not in load_types:
+                load_types.append(label)
+            continue
+
+        if code.startswith("high_recent_"):
+            muscle_key = code.removeprefix("high_recent_")
+            label = muscle_labels.get(
+                muscle_key,
+                muscle_key.replace("_", " ").title(),
+            )
+            if label not in muscles:
+                muscles.append(label)
+            continue
+
+        if message and message not in other_notices:
+            other_notices.append(message)
+
+    return {
+        "warnings": warnings,
+        "load_types": load_types,
+        "muscles": muscles,
+        "other_notices": other_notices,
+    }
+
 
 def render_readiness_card(readiness: dict[str, Any]) -> None:
-    """Rendert die aktuelle Belastbarkeit als kompakten Analyse-Status."""
+    """Rendert die aktuelle Belastbarkeit kompakt und erklärt den Statusauslöser."""
     readiness_display = _readiness_display(readiness)
-    readiness_messages = _readiness_signal_messages(readiness)
+    signal_groups = _readiness_signal_groups(readiness)
     status = str(readiness.get("status") or "").strip().casefold()
+    status_reason = str(readiness.get("status_reason") or "").strip().casefold()
 
     summary_line = (
         f'{_safe(readiness_display["icon"])} '
         f'<strong>{_safe(readiness_display["label"])}</strong>'
     )
 
-    if not readiness_messages:
-        summary_line += (
-            ' <span style="color: var(--text-color-secondary, #667085);">'
-            '· '
-            f'{_safe(readiness_display["detail"])}'
-            '</span>'
+    detail = readiness_display["detail"]
+    if status_reason == "local_load_accumulation":
+        detail = (
+            "Mehrere lokale Belastungssignale treten gleichzeitig auf. "
+            "Die Gesamtbelastung ist damit nicht zwingend zu hoch, einzelne Bereiche "
+            "waren zuletzt aber wiederholt stärker gefordert."
         )
 
     readiness_content = (
         f'<div class="readiness-card {_safe(readiness_display["css_class"])}" '
-        'style="padding: 9px 14px; margin-bottom: 10px;">'
+        'style="padding: 10px 14px; margin-bottom: 10px;">'
         '<div class="muted-label" style="margin: 0 0 3px 0; line-height: 1.15;">'
         'AKTUELLE BELASTBARKEIT'
         '</div>'
         '<div class="readiness-title" style="margin: 0; line-height: 1.35;">'
         f'{summary_line}'
         '</div>'
+        '<div class="readiness-detail" style="margin-top: 5px;">'
+        f'{_safe(detail)}'
+        '</div>'
     )
 
-    if readiness_messages:
+    if signal_groups["warnings"]:
         readiness_content += (
-            '<ul style="margin: 6px 0 0 22px; padding: 0;">'
+            '<div style="margin-top: 7px;"><strong>Relevante Warnsignale:</strong></div>'
+            '<ul style="margin: 4px 0 0 22px; padding: 0;">'
             + "".join(
                 f'<li style="margin: 2px 0;">{_safe(message)}</li>'
-                for message in readiness_messages
+                for message in signal_groups["warnings"]
             )
             + '</ul>'
         )
 
-        if status == "low":
-            readiness_content += (
-                '<div class="readiness-detail" style="margin-top: 6px;">'
-                'Für die nächsten 24–48 Stunden: Intensität oder Umfang deutlich '
-                'reduzieren oder aktive Regeneration nutzen.'
-                '</div>'
-            )
-        elif status in {"moderate", "medium", "caution"}:
-            readiness_content += (
-                '<div class="readiness-detail" style="margin-top: 6px;">'
-                'Beim nächsten geplanten Training Intensität und Umfang bewusst steuern.'
-                '</div>'
-            )
+    if signal_groups["load_types"]:
+        readiness_content += (
+            '<div class="readiness-detail" style="margin-top: 7px;">'
+            '<strong>Belastungsarten:</strong> '
+            + _safe(" · ".join(signal_groups["load_types"]))
+            + '</div>'
+        )
 
-    readiness_content += "</div>"
+    if signal_groups["muscles"]:
+        readiness_content += (
+            '<div class="readiness-detail" style="margin-top: 3px;">'
+            '<strong>Stärker beansprucht:</strong> '
+            + _safe(" · ".join(signal_groups["muscles"]))
+            + '</div>'
+        )
+
+    if signal_groups["other_notices"] and not (
+        signal_groups["load_types"] or signal_groups["muscles"]
+    ):
+        readiness_content += (
+            '<ul style="margin: 6px 0 0 22px; padding: 0;">'
+            + "".join(
+                f'<li style="margin: 2px 0;">{_safe(message)}</li>'
+                for message in signal_groups["other_notices"]
+            )
+            + '</ul>'
+        )
+
+    if status == "low":
+        guidance = (
+            "Für die nächsten 24–48 Stunden Intensität oder Umfang deutlich reduzieren; "
+            "alternativ leichte aktive Regeneration nutzen."
+        )
+    elif status in {"moderate", "medium", "caution"}:
+        guidance = (
+            "Beim nächsten geplanten Training Intensität und Umfang bewusst steuern "
+            "und die zuletzt stärker beanspruchten Bereiche berücksichtigen."
+        )
+    else:
+        guidance = readiness_display["plan_guidance"]
+
+    readiness_content += (
+        '<div class="readiness-detail" style="margin-top: 8px;">'
+        f'<strong>Nächstes Training:</strong> {_safe(guidance)}'
+        '</div>'
+        '</div>'
+    )
 
     st.markdown(readiness_content, unsafe_allow_html=True)
 

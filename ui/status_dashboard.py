@@ -12,10 +12,13 @@ def _safe(value: object, fallback: str = "") -> str:
 
 def _status_label(readiness: dict[str, Any]) -> tuple[str, str]:
     status = str(readiness.get("status", "high")).lower()
+
     if status == "low":
         return "Belastung im Blick behalten", "status-warn"
-    if status in {"medium", "caution"}:
-        return "Etwas unausgewogen", "status-caution"
+
+    if status in {"moderate", "medium", "caution"}:
+        return "Belastung bewusst steuern", "status-caution"
+
     return "Gut ausbalanciert", "status-good"
 
 
@@ -45,6 +48,7 @@ def _is_meaningful_focus(weekly_focus: dict[str, Any]) -> bool:
         "load_adjustment",
         "small_add_on",
         "crossfit",
+        "hyrox",
     }
 
     return bool(
