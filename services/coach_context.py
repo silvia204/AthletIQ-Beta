@@ -347,26 +347,27 @@ def build_history_coach_context(
                 _distribution(window_28.get("muscle_group_load")),
                 sportart,
             ),
-            "movement_coverage": {
-                "coverage_percent": float(
-                    movement_coverage.get(
-                        "coverage_percent",
-                        0.0,
-                    )
-                    or 0.0
-                ),
-                "covered": int(
-                    movement_coverage.get("covered", 0) or 0
-                ),
-                "expected": int(
-                    movement_coverage.get("expected", 0) or 0
-                ),
-            },
-            "crossfit": {
-                "coverage": history_summary.get("crossfit_coverage", {}),
-                "missing_movements": history_summary.get("missing_crossfit_movements", []),
-                "completed_movements": history_summary.get("crossfit_movements", {}),
-            },
+            # Movement-Coverage ist aktuell ausschließlich eine CrossFit-Metrik.
+            # Sie darf deshalb nur bei einem CrossFit-Profil als Coach-Fakt
+            # verwendet werden. Die Daten bleiben unabhängig davon intern erhalten.
+            **(
+                {
+                    "movement_coverage": {
+                        "coverage_percent": float(
+                            movement_coverage.get("coverage_percent", 0.0) or 0.0
+                        ),
+                        "covered": int(movement_coverage.get("covered", 0) or 0),
+                        "expected": int(movement_coverage.get("expected", 0) or 0),
+                    },
+                    "crossfit": {
+                        "coverage": history_summary.get("crossfit_coverage", {}),
+                        "missing_movements": history_summary.get("missing_crossfit_movements", []),
+                        "completed_movements": history_summary.get("crossfit_movements", {}),
+                    },
+                }
+                if str(sportart or "").strip().casefold() == "crossfit"
+                else {}
+            ),
             "underrepresented_areas": allowed_undertraining,
             "positive_observations": _positive_facts(
                 positive_observations

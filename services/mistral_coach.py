@@ -10,6 +10,7 @@ Prompt Building und den LLM-Aufruf.
 from __future__ import annotations
 
 import json
+import re
 
 from models.training_analysis import (
     TrainingAnalysis,
@@ -34,7 +35,7 @@ def build_coach_with_mistral(
     api_key: str,
     model: str,
 ) -> dict[str, str]:
-    """Verdichtet deterministische Analysefakten zu wenigen Coaching-Erkenntnissen."""
+    """Verdichtet deterministische Analysefakten zu einer zusammenhängenden Coach-Einordnung."""
     readiness_facts = coach_context.get("readiness_summary_facts", {})
     history_facts = coach_context.get("history_coach_facts", {})
 
@@ -52,86 +53,71 @@ READINESS-KURZFAKTEN
 {json.dumps(readiness_facts, ensure_ascii=False, indent=2)}
 
 AUFGABE
-Schreibe eine sehr kompakte Coach-Einordnung. Die Analyse ist im Hintergrund detailliert;
-hier sollen nur die wichtigsten Erkenntnisse erscheinen.
+Schreibe eine zusammenhängende Coach-Einordnung zum dokumentierten Training.
+Der Text soll die aktuelle Situation, die wichtigsten strukturellen Auffälligkeiten und die
+praktische Bedeutung für das nächste geplante Training sinnvoll miteinander verbinden.
 
 WICHTIG:
-- Bewegungsmuster, Muskelgruppen, Trainingsziele, Belastungsarten und CrossFit-Movements
-  NICHT einzeln abarbeiten.
+- Schreibe EINEN kohärenten Coachtext ohne Zwischenüberschriften oder künstliche Sektionen.
+- 2 bis 3 kurze Absätze sind erlaubt, wenn sie den Lesefluss verbessern.
+- Wiederhole keine Aussage oder Begründung innerhalb des Textes.
+- Bewegungsmuster, Muskelgruppen, Trainingsziele und Belastungsarten NICHT einzeln abarbeiten.
+- CrossFit-Movements oder CrossFit-Standards nur dann erwähnen, wenn SPORTART ausdrücklich
+  CrossFit ist und entsprechende CrossFit-Fakten im Faktenblock vorhanden sind. Bei HYROX
+  CrossFit niemals als Benchmark, Vergleichsstandard oder Referenz verwenden.
 - Führe zusammengehörige Signale zu EINEM Coaching-Punkt zusammen.
-  Beispiel: wenig horizontales Drücken + Brust unter Zielbereich = ein gemeinsamer Punkt.
-- Nenne nur 1 bis maximal 3 relevante Auffälligkeiten insgesamt.
-- Wenn mehrere Kategorien dieselbe Ursache beschreiben, erwähne sie nicht doppelt.
-- Wenn eine Kategorie keinen zusätzlichen Erkenntnisgewinn liefert, lasse sie vollständig weg.
+- Nenne nur die 1 bis maximal 3 relevantesten Auffälligkeiten insgesamt.
 - Keine vollständige Bestandsaufnahme und keine Wiederholung der Analysewerte.
 - Keine internen Feldnamen, snake_case-Begriffe oder technischen Codes.
 - Erfinde keine Lücken. Muskelgruppen nur anhand von muscle_group_target_assessment bewerten.
+- Erfinde keine Trainingsqualitäten oder Fachbegriffe. Verwende nur Trainingsziele,
+  Bewegungsmuster und Belastungsarten, die in den deterministischen Fakten vorkommen.
+- Maximalkraft und Kraftausdauer getrennt behandeln; niemals "maximale Kraftausdauer" formulieren.
+- Technik, technische Präzision, Mobilität oder ähnliche Lücken nur nennen, wenn sie als
+  deterministischer Fakt ausdrücklich vorhanden sind.
 - Movement-Recency ist keine Trainingspause.
-- Formuliere historische Aussagen immer bezogen auf den dokumentierten Analysezeitraum:
-  statt „nie trainiert“ z. B. „im betrachteten Zeitraum nicht dokumentiert“.
+- Historische Aussagen immer auf den dokumentierten Analysezeitraum beziehen.
 - Keine medizinischen, biomechanischen oder leistungsbezogenen Kausalbehauptungen ableiten,
-  die nicht ausdrücklich in den deterministischen Fakten stehen. Insbesondere nicht behaupten,
-  dass eine Verteilung Schulterstabilität, Leistungsfähigkeit oder Verletzungsrisiko einschränkt.
-- Begriffe wie „überrepräsentiert“ nur verwenden, wenn der entsprechende deterministische
-  Zielbereich tatsächlich den Status „over“ liefert.
-- Priorisiere: Lieber 1–2 wirklich relevante Erkenntnisse als mehrere schwächere Signale.
+  die nicht ausdrücklich in den deterministischen Fakten stehen.
+- Begriffe wie "überrepräsentiert" nur verwenden, wenn der deterministische Zielbereich
+  tatsächlich den Status "over" liefert.
 
 READINESS UND TRAININGSRECENCY HABEN HÖCHSTE PRIORITÄT:
 - Wenn seit der letzten dokumentierten Einheit >= 7 Tage vergangen sind, steht zunächst ein
   kontrollierter Wiedereinstieg im Vordergrund. Historische Lücken dürfen genannt werden,
   aber nicht als sofort abzuarbeitende Zusatzreize.
-- Bei >= 7 Tagen Pause keine Formulierung wie „die Pause bietet die Chance, Lücken zu schließen“.
 - low: Regeneration/sehr leichte Aktivität; keine Zusatzreize.
-- moderate/medium/caution: Belastung steuern; Lücken nur als späteres Thema, kein Zusatzblock.
+- moderate/medium/caution: Belastung steuern; Lücken nur als späteres Thema.
 - high: Ohne längere Trainingspause darf bei einer echten relevanten Lücke eine kleine konkrete
   Ergänzung mit höchstens 1–2 einfachen Übungsbeispielen genannt werden.
-- high nach >= 7 Tagen ohne dokumentierte Einheit bedeutet nicht automatisch Zusatztraining:
-  zuerst kontrollierter Wiedereinstieg, danach schrittweise Integration relevanter Lücken.
 - Ein zusätzlicher Trainingsblock ist nicht automatisch nötig.
 
-LÄNGE:
-- STATUS: maximal 2 kurze Sätze.
-- INSIGHTS: maximal 3 kurze Absätze; jeder Absatz maximal 2 Sätze.
-- NEXT: maximal 2 kurze Sätze. Wenn keine konkrete Handlung nötig ist, sage das knapp.
-- Gesamter Coachtext idealerweise 120–180 Wörter, niemals mehr als 220 Wörter.
+LÄNGE UND STIL:
+- Ideal 100–160 Wörter, niemals mehr als 190 Wörter.
+- Präzise, coachend und konkret; keine Floskeln.
+- Ausschließlich Klartext: kein Markdown, keine Sternchen, keine Listenmarker, keine Überschriften.
 
-AUSGABEFORMAT – exakt diese Tags und immer mit schließendem Tag:
+AUSGABEFORMAT – exakt diese zwei Tags und immer mit schließendem Tag:
 <READINESS_SUMMARY>Ein kurzer Satz nur zu Overload-Signalen.</READINESS_SUMMARY>
-<STATUS>Maximal zwei kurze Sätze zu Trainingsrhythmus, letzter Einheit und Readiness.</STATUS>
-<INSIGHTS>Ein bis maximal drei kurze Absätze mit den wichtigsten zusammengeführten Erkenntnissen.</INSIGHTS>
-<NEXT>Eine kurze koordinierte Konsequenz für die nächsten Einheiten oder der Hinweis, dass aktuell keine gezielte Ergänzung nötig ist.</NEXT>
+<COACH_FEEDBACK>Der vollständige zusammenhängende Coachtext.</COACH_FEEDBACK>
 
 Nichts vor oder nach diesen Tags ausgeben.
 """.strip()
 
     response = call_mistral(api_key=api_key, model=model, content=prompt)
 
-    readiness_summary = _extract_section(response, "<READINESS_SUMMARY>", "</READINESS_SUMMARY>")
-    status = _extract_section(response, "<STATUS>", "</STATUS>")
-    insights = _extract_section(response, "<INSIGHTS>", "</INSIGHTS>")
-    next_step = _extract_section(response, "<NEXT>", "</NEXT>")
+    readiness_summary = _sanitize_coach_text(
+        _extract_section(response, "<READINESS_SUMMARY>", "</READINESS_SUMMARY>")
+    )
+    coach_feedback = _sanitize_coach_text(
+        _extract_section(response, "<COACH_FEEDBACK>", "</COACH_FEEDBACK>")
+    )
 
-    # Robustheit gegen fehlerhafte/fehlende schließende Tags von Mistral:
-    # Kein Folgeabschnitt darf in den vorherigen Abschnitt hineinlaufen.
-    if "<NEXT>" in insights:
-        insights = insights.split("<NEXT>", 1)[0].strip()
-    for tag in ("<INSIGHTS>", "<NEXT>"):
-        if tag in status:
-            status = status.split(tag, 1)[0].strip()
-    for tag in ("<STATUS>", "<INSIGHTS>", "<NEXT>"):
-        if tag in readiness_summary:
-            readiness_summary = readiness_summary.split(tag, 1)[0].strip()
-
-    if not readiness_summary or not status or not insights or not next_step:
+    if not readiness_summary or not coach_feedback:
         raise RuntimeError(
-            "Kompakte Coach-Einordnung konnte nicht vollständig aus der Mistral-Antwort gelesen werden."
+            "Coach-Einordnung konnte nicht vollständig aus der Mistral-Antwort gelesen werden."
         )
 
-    coach_feedback = (
-        f"## Aktuelle Einordnung\n{status}\n\n"
-        f"## Was auffällt\n{insights}\n\n"
-        f"## Für die nächsten Einheiten\n{next_step}"
-    )
     return {"readiness_summary": readiness_summary, "coach_feedback": coach_feedback}
 
 def build_daily_coach_tips(
@@ -292,6 +278,37 @@ Fehlerhafte Antwort:
         ).strip(),
     }
 
+
+
+def _sanitize_coach_text(text: str) -> str:
+    """Bereinigt LLM-Steuer-Tags und unerwünschtes Markdown aus Coachtexten."""
+    value = str(text or "").strip()
+
+    # Alle bekannten Abschnittstags entfernen, auch wenn Mistral sie verschachtelt
+    # oder ein schließendes Tag an der falschen Stelle ausgibt.
+    value = re.sub(
+        r"</?(?:READINESS_SUMMARY|COACH_FEEDBACK|STATUS|INSIGHTS|NEXT)>",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+
+    cleaned_lines: list[str] = []
+    for raw_line in value.splitlines():
+        line = raw_line.strip()
+        if not line:
+            if cleaned_lines and cleaned_lines[-1] != "":
+                cleaned_lines.append("")
+            continue
+
+        # Coachtext wird als Klartext gespeichert; die UI formatiert die Abschnitte.
+        line = re.sub(r"^#{1,6}\s*", "", line)
+        line = re.sub(r"^[-*+]\s+", "", line)
+        line = line.replace("**", "").replace("__", "")
+        line = line.replace("`", "")
+        cleaned_lines.append(line)
+
+    return "\n".join(cleaned_lines).strip()
 
 
 def _extract_section(

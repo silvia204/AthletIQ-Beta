@@ -334,33 +334,14 @@ def render_coach_dashboard(
     # COACH-EINORDNUNG
     # ----------------------------------------------------
 
-    feedback = split_coach_feedback(coach_text)
-
-    compact_sections = (
-        ("Aktuelle Einordnung", "status"),
-        ("Was auffällt", "insights"),
-        ("Für die nächsten Einheiten", "next"),
-    )
-
-    has_compact_content = any(feedback.get(key, "").strip() for _, key in compact_sections)
-    if has_compact_content:
-        for title, key in compact_sections:
-            content = feedback.get(key, "").strip()
-            if content:
-                st.markdown(f"#### {title}")
-                st.markdown(content)
+    coach_summary = str(coach_text or "").strip()
+    if coach_summary:
+        st.markdown(coach_summary)
     else:
-        st.markdown("#### Coach-Einordnung")
-        coach_summary = feedback.get("summary", "").strip()
-        if not coach_summary:
-            coach_summary = feedback.get("legacy", "").strip()
-        if coach_summary:
-            st.markdown(coach_summary)
-        else:
-            st.caption(
-                "Für eine ausführliche Coach-Einordnung liegen aktuell "
-                "noch nicht genügend Informationen vor."
-            )
+        st.caption(
+            "Für eine ausführliche Coach-Einordnung liegen aktuell "
+            "noch nicht genügend Informationen vor."
+        )
 
     # ----------------------------------------------------
     # NÄCHSTES GEPLANTES TRAINING
