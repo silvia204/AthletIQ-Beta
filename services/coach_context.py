@@ -16,6 +16,7 @@ from typing import Any
 from models.training_analysis import TrainingAnalysis
 
 from services.training_balance import assess_muscle_group_balance
+from analyzers.hyrox_skills import HYROX_SKILLS
 
 
 def _messages(
@@ -347,9 +348,29 @@ def build_history_coach_context(
                 _distribution(window_28.get("muscle_group_load")),
                 sportart,
             ),
-            # Movement-Coverage ist aktuell ausschließlich eine CrossFit-Metrik.
-            # Sie darf deshalb nur bei einem CrossFit-Profil als Coach-Fakt
-            # verwendet werden. Die Daten bleiben unabhängig davon intern erhalten.
+            # Sportartspezifische Fakten werden strikt getrennt. HYROX nutzt die
+            # bereits deterministisch aggregierten HYROX-Skills aus dem 28-Tage-
+            # History-Fenster; es findet hier keine zweite Skill-Erkennung statt.
+            **(
+                {
+                    "hyrox": {
+                        "completed_skills": {
+                            skill: int(window_28.get("hyrox_skills", {}).get(skill, 0) or 0)
+                            for skill in HYROX_SKILLS
+                            if int(window_28.get("hyrox_skills", {}).get(skill, 0) or 0) > 0
+                        },
+                        "missing_skills": [
+                            skill
+                            for skill in HYROX_SKILLS
+                            if int(window_28.get("hyrox_skills", {}).get(skill, 0) or 0) == 0
+                        ],
+                    }
+                }
+                if str(sportart or "").strip().casefold() == "hyrox"
+                else {}
+            ),
+            # Movement-Coverage ist ausschließlich eine CrossFit-Metrik und wird
+            # nur bei einem CrossFit-Profil an den Coach weitergegeben.
             **(
                 {
                     "movement_coverage": {

@@ -62,9 +62,15 @@ WICHTIG:
 - 2 bis 3 kurze Absätze sind erlaubt, wenn sie den Lesefluss verbessern.
 - Wiederhole keine Aussage oder Begründung innerhalb des Textes.
 - Bewegungsmuster, Muskelgruppen, Trainingsziele und Belastungsarten NICHT einzeln abarbeiten.
-- CrossFit-Movements oder CrossFit-Standards nur dann erwähnen, wenn SPORTART ausdrücklich
-  CrossFit ist und entsprechende CrossFit-Fakten im Faktenblock vorhanden sind. Bei HYROX
-  CrossFit niemals als Benchmark, Vergleichsstandard oder Referenz verwenden.
+- SPORTARTSPEZIFISCHE FAKTEN SIND VERBINDLICH UND DÜRFEN NICHT UMINTERPRETIERT WERDEN:
+  * Bei CrossFit ausschließlich den Faktenblock "crossfit" für CrossFit-Movements verwenden.
+  * Bei HYROX ausschließlich den Faktenblock "hyrox" für HYROX-Skills verwenden.
+    Ein Skill in "completed_skills" ist dokumentiert und darf NIEMALS als fehlend bezeichnet werden.
+    Nur Skills in "missing_skills" dürfen als fehlend bezeichnet werden.
+  * Bei anderen Sportarten weder CrossFit-Movements noch HYROX-Skills bewerten.
+- Allgemeine Bewegungsmuster (z. B. Hinge, Anti-Rotation, Zug-/Drückbewegungen) sind KEINE
+  HYROX-Skills. Leite aus ihnen keine HYROX-spezifische Wettkampfrelevanz ab.
+- Bei HYROX CrossFit niemals als Benchmark, Vergleichsstandard oder Referenz verwenden.
 - Führe zusammengehörige Signale zu EINEM Coaching-Punkt zusammen.
 - Nenne nur die 1 bis maximal 3 relevantesten Auffälligkeiten insgesamt.
 - Keine vollständige Bestandsaufnahme und keine Wiederholung der Analysewerte.
@@ -86,7 +92,10 @@ READINESS UND TRAININGSRECENCY HABEN HÖCHSTE PRIORITÄT:
 - Wenn seit der letzten dokumentierten Einheit >= 7 Tage vergangen sind, steht zunächst ein
   kontrollierter Wiedereinstieg im Vordergrund. Historische Lücken dürfen genannt werden,
   aber nicht als sofort abzuarbeitende Zusatzreize.
-- low: Regeneration/sehr leichte Aktivität; keine Zusatzreize.
+- low: Die niedrige Belastbarkeit ist die zentrale Aussage. Beginne den Coachtext damit und
+  erkläre sie anhand der vorhandenen Overload-Signale und Trainingsrecency. Regeneration bzw.
+  kontrollierter Wiedereinstieg hat Vorrang; strukturelle oder sportartspezifische Lücken sind
+  höchstens sekundär und keine Aufforderung zu Zusatzreizen.
 - moderate/medium/caution: Belastung steuern; Lücken nur als späteres Thema.
 - high: Ohne längere Trainingspause darf bei einer echten relevanten Lücke eine kleine konkrete
   Ergänzung mit höchstens 1–2 einfachen Übungsbeispielen genannt werden.
