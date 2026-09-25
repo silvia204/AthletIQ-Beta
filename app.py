@@ -1708,7 +1708,7 @@ with header_action_col:
         type="primary",
         width="stretch",
         disabled=user_profile is None,
-        help="Training per Foto oder Text erfassen",
+        help="Training per Kamera, Galerie oder Text erfassen",
     ):
         st.session_state["workout_entry_requested"] = True
         # Jede neue Trainingseingabe startet mit neutralen Eingabefeldern.
@@ -1926,7 +1926,7 @@ with tab0:
         top_left, top_right = st.columns([4, 1])
         with top_left:
             st.markdown("## Neues Training")
-            st.caption("Erfasse dein Workout per Foto oder Text. Die Erkennung kannst du vor dem Speichern wie gewohnt prüfen und anpassen.")
+            st.caption("Erfasse dein Workout per Kamera, Bild aus der Galerie oder Text. Die Erkennung kannst du vor dem Speichern wie gewohnt prüfen und anpassen.")
         with top_right:
             if st.button("← Zurück", key="close_workout_entry", width="stretch"):
                 st.session_state["workout_entry_requested"] = False
@@ -1970,74 +1970,66 @@ with tab0:
             st.markdown("### Wie möchtest du dein Training eintragen?")
             input_type = st.radio(
                 "Eingabeart",
-                ["📷 Foto", "✎ Text"],
+                ["📷 Kamera", "🖼️ Galerie", "✎ Text"],
                 horizontal=True,
                 label_visibility="collapsed",
             )
 
             should_analyze = False
             workout_text_input = ""
-            photo = None
-            model_to_use = (
-                MISTRAL_TEXT_MODEL
-            )
+            image_input = None
 
-            content_payload = ""
-            if (
-                input_type
-                == "📷 Foto"
-            ):
-                photo = st.camera_input(
+            if input_type == "📷 Kamera":
+                image_input = st.camera_input(
                     "Fotografiere das Whiteboard, "
                     "einen Zettel oder dein Display"
                 )
 
                 should_analyze = st.button(
                     "📷 Foto analysieren",
-                    disabled=photo is None,
+                    disabled=image_input is None,
                     type="primary",
                     width="stretch",
                 )
 
-                if (
-                    should_analyze
-                    and photo is not None
-                ):
-                    mime_type = (
-                        getattr(
-                            photo,
-                            "type",
-                            None,
-                        )
-                        or "image/jpeg"
-                    )
+            elif input_type == "🖼️ Galerie":
+                image_input = st.file_uploader(
+                    "Workout-Bild aus der Galerie auswählen",
+                    type=["jpg", "jpeg", "png", "webp"],
+                    accept_multiple_files=False,
+                    help=(
+                        "Wähle ein Foto oder einen Screenshot deines Workouts aus. "
+                        "Unterstützt werden JPG, PNG und WebP."
+                    ),
+                )
 
+                should_analyze = st.button(
+                    "🖼️ Bild analysieren",
+                    disabled=image_input is None,
+                    type="primary",
+                    width="stretch",
+                )
 
             else:
-                workout_text_input = (
-                    st.text_area(
-                        "Workout hier eintragen",
-                        placeholder=(
-                            "Beispiel:\n"
-                            "Strength: Deadlift 4 × 3\n\n"
-                            "Workout: 5 RFT\n"
-                            "300 m Row\n"
-                            "6 Burpees\n"
-                            "12 Deadlifts"
-                        ),
-                        height=220,
-                    )
+                workout_text_input = st.text_area(
+                    "Workout hier eintragen",
+                    placeholder=(
+                        "Beispiel:\n"
+                        "Strength: Deadlift 4 × 3\n\n"
+                        "Workout: 5 RFT\n"
+                        "300 m Row\n"
+                        "6 Burpees\n"
+                        "12 Deadlifts"
+                    ),
+                    height=220,
                 )
 
                 should_analyze = st.button(
                     "🧠 Workout analysieren",
-                    disabled=not (
-                        workout_text_input.strip()
-                    ),
+                    disabled=not workout_text_input.strip(),
                     type="primary",
                     width="stretch",
                 )
-
 
             if should_analyze:
                 with st.spinner(
@@ -2045,14 +2037,11 @@ with tab0:
                     "und geprüft ..."
                 ):
                     try:
-                        if (
-input_type
-                            == "📷 Foto"
-                        ):
+                        if input_type in {"📷 Kamera", "🖼️ Galerie"}:
                             parsed_workout = parse_workout(
-                                image_data=photo.getvalue(),
+                                image_data=image_input.getvalue(),
                                 image_mime_type=(
-                                    getattr(photo, "type", None)
+                                    getattr(image_input, "type", None)
                                     or "image/jpeg"
                                 ),
                                 api_key=MISTRAL_API_KEY,
