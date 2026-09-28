@@ -366,6 +366,7 @@ else:
 ALLOWED_GOALS = {
     "crossfit": "CrossFit",
     "hyrox": "Hyrox",
+    "running": "Running",
     "general fitness": "General Fitness",
     "general_fitness": "General Fitness",
     "abnehmen": "Abnehmen",
