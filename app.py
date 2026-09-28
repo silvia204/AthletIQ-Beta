@@ -559,7 +559,7 @@ def get_user_profile(
         raise ValueError(
             "Ungültiges Ziel für "
             f"„{username}“: {row.get('goal')}. "
-            "Erlaubt sind CrossFit, Hyrox, "
+            "Erlaubt sind CrossFit, Hyrox, Running,"
             "General Fitness und Abnehmen."
         )
 
