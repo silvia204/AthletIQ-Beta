@@ -186,7 +186,9 @@ def normalize_name(text: str) -> str:
 
     import re
 
-    text = text.lower().strip()
+    from html import unescape
+
+    text = unescape(text).lower().strip()
 
     replacements = {
         "-": " ",
@@ -239,7 +241,9 @@ def normalize_name(text: str) -> str:
         text,
     )
 
-    return text.strip()
+    # Side annotations describe execution, not a different movement family.
+    text = re.sub(r"\s+(?:r\s*\+\s*l|l\s*\+\s*r|right|left|rechts|links|r|l)$", "", text)
+    return " ".join(text.split())
 
 
 # ============================================================================
@@ -427,6 +431,17 @@ register(
         category=MovementCategory.WEIGHTLIFTING,
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
+            'Rolling Deck Squat',
+            'Rolling Deck Squats',
+            'Kang Squat',
+            'Kang Squats',
+            '1.5 Back Squat',
+            '1.5 Back Squats',
+            'Paused Back Squat',
+            'Paused Back Squats',
+            'Wall Squat',
+            'Wall Squats',
+            'FS',
             "Air Squat",
             "Air Squats",
             "Goblet Squat",
@@ -511,6 +526,11 @@ register(
         category=MovementCategory.WEIGHTLIFTING,
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
+            'KB RDL',
+            'Kettlebell RDL',
+            'Kettlebell Romanian Deadlift',
+            'Clean Deadlift',
+            'Clean Deadlifts',
             "Deadlift",
             "Deadlifts",
             "Romanian Deadlift",
@@ -550,6 +570,12 @@ register(
         category=MovementCategory.WEIGHTLIFTING,
         minimum_level=AthleteLevel.SCALED,
         variants=(
+            'Tall Power Clean',
+            'Tall Power Cleans',
+            'DB Hang Squat Clean',
+            'DB Hang Squat Cleans',
+            'Dumbbell Hang Squat Clean',
+            'Dumbbell Hang Squat Cleans',
             "Clean",
             "Cleans",
             "Power Clean",
@@ -642,6 +668,10 @@ register(
         category=MovementCategory.WEIGHTLIFTING,
         minimum_level=AthleteLevel.SCALED,
         variants=(
+            'DB Split Jerk',
+            'DB Split Jerks',
+            'Dumbbell Split Jerk',
+            'Dumbbell Split Jerks',
             "Jerk",
             "Jerks",
             "Push Jerk",
@@ -723,6 +753,7 @@ register(
             "Wallball shots",
         ),
         aliases=(
+            'WB',
             "wall balls",
             "wall ball shot",
             "heavy wall ball",
@@ -753,6 +784,13 @@ register(
         category=MovementCategory.FUNCTIONAL,
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
+            'Burpee to Target',
+            'Burpees to Target',
+            'Burpee Broad Jump',
+            'Burpee Broad Jumps',
+            'Burpees Broad Jumps',
+            'Bar-facing Burpee',
+            'Bar-facing Burpees',
             "Burpee",
             "Burpees",
             "Burpee Over Bar",
@@ -796,6 +834,8 @@ register(
             "Box Step Ups",
             "Box Step Over",
             "Box Step Overs",
+            "Lateral Box Step Over",
+            "Lateral Box Step Overs",
             "Box Jump",
             "Box Jumps",
             "Box Jump Over",
@@ -865,6 +905,17 @@ register(
         category=MovementCategory.FUNCTIONAL,
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
+            'Lunges',
+            'Back Rack Lunge',
+            'Back Rack Lunges',
+            'Alt. Back Rack Lunges',
+            'Jumping Lunge',
+            'Jumping Lunges',
+            'Jumping Lunges (bodyweight)',
+            'DB Front Rack Walking Lunge',
+            'DB Front Rack Walking Lunges',
+            'DB OH Walking Lunge',
+            'DB OH Walking Lunges',
             "Walking Lunge",
             "Walking Lunges",
             "Reverse Lunge",
@@ -1080,6 +1131,8 @@ register(
             "hand release push up",
             "hr push up",
             "deficit push up",
+            "defizit push up",
+            "defizit push ups",
             "ring push up",
         ),
         movement_patterns=(
@@ -1219,8 +1272,21 @@ register(
         category=MovementCategory.GYMNASTICS,
         minimum_level=AthleteLevel.SCALED,
         variants=(
+            'Chest-to-Wall HS',
+            'Chest-to-Wall Handstand',
+            'Partner Handstand',
+            'Freestanding Hold',
+            'Wall Line Drills',
+            'Handstand Weight Shifts',
+            'Weight Shifts',
+            'Kick-up Technique',
+            'Heel Pulls',
+            'Toe Pulls',
+            'Freestanding Attempts',
             "Wall Handstand Hold",
             "Wall Handstand Holds",
+            "Handstand Hold",
+            "Handstand Holds",
             "Freestanding Handstand",
             "Freestanding Handstands",
             "Wall Walk",
@@ -1317,6 +1383,10 @@ register(
         category=MovementCategory.GYMNASTICS,
         minimum_level=AthleteLevel.SCALED,
         variants=(
+            'Knees to Elbows',
+            'Knees to Elbow',
+            'Knee to Elbow',
+            'K2E',
             "Knee Raise",
             "Knee Raises",
             "Hanging Knee Raise",
@@ -1414,6 +1484,11 @@ register(
         category=MovementCategory.GYMNASTICS,
         minimum_level=AthleteLevel.ADVANCED,
         variants=(
+            'Pistol Squat',
+            'Pistol Squats',
+            'Alternating Pistol Squat',
+            'Alternating Pistol Squats',
+            'Alt. Pistol Squats',
             "Pistol",
             "Pistols",
             "Assisted Pistol",
@@ -1630,6 +1705,8 @@ register(
         category=MovementCategory.MONOSTRUCTURAL,
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
+            'Shuttle Run',
+            'Shuttle Runs',
             "Walk",
             "Jog",
             "Run",
@@ -1673,6 +1750,9 @@ register(
             "Erg Row",
         ),
         aliases=(
+            'Row/ Bizeps Row',
+            'Row / Bizeps Row',
+            'Bizeps Row',
             "rowing",
             "row erg",
             "erg row",
@@ -1760,6 +1840,9 @@ register(
         category=MovementCategory.MONOSTRUCTURAL,
         minimum_level=AthleteLevel.BEGINNER,
         variants=(
+            'Crossover SU',
+            'Crossover Single Under',
+            'Crossover Single Unders',
             "Single Under",
             "Double Under",
             "Triple Under",
@@ -1792,6 +1875,575 @@ register(
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
+
+# Additional accessory movements and isometric holds.
+# Static trunk stabilization has no matching MovementPattern enum; do not
+# classify it as dynamic core flexion or rotation.
+register(
+    Movement(
+        movement_id="wall_sit",
+        display_name="Wall Sit",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=("Wall Sit", "Wall Sit Hold"),
+        aliases=("wall sit", "wall sits", "wandsitz"),
+        movement_patterns=(MovementPattern.SQUAT,),
+        muscle_groups=(MuscleGroup.QUADRICEPS,),
+        notes="Isometric wall-supported squat hold.",
+    )
+)
+
+register(
+    Movement(
+        movement_id="passive_hang",
+        display_name="Passive Hang",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=("Passive Hang", "Dead Hang"),
+        aliases=("passiv hang", "passive hang", "dead hang", "passives haengen", "passives hängen"),
+        muscle_groups=(MuscleGroup.FOREARMS,),
+        notes="Passive bar hang; grip hold without active pulling.",
+    )
+)
+
+register(
+    Movement(
+        movement_id="lunge_hold",
+        display_name="Lunge Hold",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=("Lunge Hold", "Lunges Hold", "Split Squat Hold"),
+        aliases=("lunge hold", "lunges hold", "lunge holds", "split squat hold"),
+        movement_patterns=(MovementPattern.LUNGE,),
+        muscle_groups=(MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES),
+        notes="Isometric split-stance hold.",
+    )
+)
+
+register(
+    Movement(
+        movement_id="plank",
+        display_name="Plank",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Front Plank',
+            'Front Plank Hold',
+            'Plank Hold',
+            'Forearm Plank',
+            'Shoulder Tap',
+            'Shoulder Taps',
+            'Plank Shoulder Tap',
+            'Plank Shoulder Taps',
+            'Pike Shoulder Taps',
+        ),
+        aliases=("plank", "front plank hold", "plank hold", "unterarmstuetz", "unterarmstütz"),
+        muscle_groups=(MuscleGroup.CORE,),
+        notes="Isometric trunk stabilization against extension.",
+    )
+)
+
+register(
+    Movement(
+        movement_id="side_plank",
+        display_name="Side Plank",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=("Side Plank", "Side Plank Hold", "Side Hold"),
+        aliases=("side plank", "side hold", "side plank hold", "seitstuetz", "seitstütz"),
+        muscle_groups=(MuscleGroup.CORE,),
+        notes="Isometric lateral trunk stabilization; side hold denotes side plank.",
+    )
+)
+
+register(
+    Movement(
+        movement_id="renegade_row",
+        display_name="Renegade Row",
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.SCALED,
+        variants=("Renegade Row", "Renegade Rows", "DB Renegade Row", "DB Renegade Rows", "Dumbbell Renegade Row", "Dumbbell Renegade Rows"),
+        aliases=("renegade row", "db renegade row", "dumbbell renegade row"),
+        movement_patterns=(MovementPattern.HORIZONTAL_PULL,),
+        muscle_groups=(MuscleGroup.BACK, MuscleGroup.LATS, MuscleGroup.CORE),
+        notes="Dumbbell row from a plank position with trunk stabilization.",
+    )
+)
+
+register(
+    Movement(
+        movement_id="crunch",
+        display_name="Crunch",
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=("Crunch", "Crunches", "Bench Crunch", "Bench Crunches"),
+        aliases=("crunch", "crunches", "bench crunch", "bench crunches"),
+        movement_patterns=(MovementPattern.CORE_FLEXION,),
+        muscle_groups=(MuscleGroup.CORE,),
+        notes="Dynamic trunk flexion, including the bench variation.",
+    )
+)
+
+
+register(
+    Movement(
+        movement_id='strict_press',
+        display_name='Strict Press',
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Strict Press',
+            'Shoulder Press',
+            'Barbell Strict Press',
+        ),
+        aliases=('strict press',),
+        movement_patterns=(MovementPattern.VERTICAL_PUSH,),
+        muscle_groups=(MuscleGroup.SHOULDERS, MuscleGroup.TRICEPS),
+        is_crossfit_movement=False,
+        notes='Strict overhead press without leg drive.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='push_press',
+        display_name='Push Press',
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Push Press',
+            'Push Presses',
+            'DB Push Press',
+        ),
+        aliases=('push press',),
+        movement_patterns=(MovementPattern.VERTICAL_PUSH,),
+        muscle_groups=(MuscleGroup.SHOULDERS, MuscleGroup.TRICEPS),
+        is_crossfit_movement=False,
+        notes='Overhead press with leg drive, without the receiving dip of a jerk.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='z_press',
+        display_name='Z-Press',
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Z-Press',
+            'KB Z-Press',
+            'Bottom Up KB Z-Press',
+            'Bottoms Up KB Z-Press',
+        ),
+        aliases=('z-press',),
+        movement_patterns=(MovementPattern.VERTICAL_PUSH,),
+        muscle_groups=(MuscleGroup.SHOULDERS, MuscleGroup.TRICEPS, MuscleGroup.CORE),
+        is_crossfit_movement=False,
+        notes='Seated floor press, including bottoms-up kettlebell execution.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='sots_press',
+        display_name='Sots Press',
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Sots Press',
+            'BTN Sots Press',
+            'Behind the Neck Sots Press',
+        ),
+        aliases=('sots press',),
+        movement_patterns=(MovementPattern.VERTICAL_PUSH,),
+        muscle_groups=(MuscleGroup.SHOULDERS, MuscleGroup.TRICEPS),
+        is_crossfit_movement=False,
+        notes='Overhead press performed in a squat position.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='bradford_press',
+        display_name='Bradford Press',
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Bradford Press',
+            'Bradford Presses',
+        ),
+        aliases=('bradford press',),
+        movement_patterns=(MovementPattern.VERTICAL_PUSH,),
+        muscle_groups=(MuscleGroup.SHOULDERS, MuscleGroup.TRICEPS),
+        is_crossfit_movement=False,
+        notes='Press alternating between front and behind-neck positions.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='clean_pull',
+        display_name='Clean Pull',
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Clean Pull',
+            'Clean Pulls',
+        ),
+        aliases=('clean pull',),
+        movement_patterns=(MovementPattern.HINGE,),
+        muscle_groups=(MuscleGroup.GLUTES, MuscleGroup.HAMSTRINGS, MuscleGroup.TRAPS),
+        is_crossfit_movement=False,
+        notes='Clean pulling exercise without a catch; separate from a full clean.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='cluster',
+        display_name='Cluster',
+        category=MovementCategory.WEIGHTLIFTING,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Cluster',
+            'Clusters',
+            'DB Cluster',
+        ),
+        aliases=('cluster',),
+        movement_patterns=(MovementPattern.HINGE, MovementPattern.SQUAT, MovementPattern.VERTICAL_PUSH),
+        muscle_groups=(MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES, MuscleGroup.SHOULDERS),
+        is_crossfit_movement=False,
+        notes='Squat clean transitioning directly into a thruster; one compound movement.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='hollow_body_hold',
+        display_name='Hollow Body Hold',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Hollow Body',
+            'Hollow Body Hold',
+            'Hollow Hold',
+        ),
+        aliases=('hollow body',),
+        movement_patterns=(),
+        muscle_groups=(MuscleGroup.CORE,),
+        is_crossfit_movement=False,
+        notes='Static hollow body position; distinct from hollow rocks.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='scapula_pull_up',
+        display_name='Scapula Pull-up',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Scapula Pull-up',
+            'Scapula Pull-ups',
+            'Scapular Pull-up',
+            'Scapular Pull-ups',
+        ),
+        aliases=('scapula pull-up',),
+        movement_patterns=(MovementPattern.VERTICAL_PULL,),
+        muscle_groups=(MuscleGroup.LATS, MuscleGroup.TRAPS),
+        is_crossfit_movement=False,
+        notes='Scapular pulling drill with straight elbows.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='kip_swing',
+        display_name='Kip Swing',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Kip Swing',
+            'Kip Swings',
+            'Beat Swing',
+            'Beat Swings',
+        ),
+        aliases=('kip swing',),
+        movement_patterns=(),
+        muscle_groups=(MuscleGroup.CORE,),
+        is_crossfit_movement=False,
+        notes='Hollow-arch swing drill without a completed pull-up.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='pull_up_hold',
+        display_name='Pull-up Hold',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Pull-up Hold',
+            'Top of Bar Pull-up Hold',
+            'Top of Bar Pull ups Hold',
+            'Chin Over Bar Hold',
+        ),
+        aliases=('pull-up hold',),
+        movement_patterns=(MovementPattern.VERTICAL_PULL,),
+        muscle_groups=(MuscleGroup.LATS, MuscleGroup.BICEPS),
+        is_crossfit_movement=False,
+        notes='Isometric hold at the top of a pull-up.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='ring_support_hold',
+        display_name='Ring Support Hold',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Ring Support Hold',
+            'Ring Support',
+        ),
+        aliases=('ring support hold',),
+        movement_patterns=(),
+        muscle_groups=(MuscleGroup.TRICEPS, MuscleGroup.SHOULDERS),
+        is_crossfit_movement=False,
+        notes='Static support on rings; distinct from a dynamic ring dip.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='gymnastics_pullover',
+        display_name='Gymnastics Pullover',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Pullover',
+            'Gymnastics Pullover',
+            'Bar Pullover',
+            'Ring Pullover',
+            'Aufschwung',
+        ),
+        aliases=('pullover',),
+        movement_patterns=(MovementPattern.VERTICAL_PULL, MovementPattern.CORE_FLEXION),
+        muscle_groups=(MuscleGroup.LATS, MuscleGroup.CORE, MuscleGroup.HIP_FLEXORS),
+        is_crossfit_movement=False,
+        notes='Gymnastics ascent over the bar or scaled on rings; not a CrossFit level prerequisite.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='kettlebell_halo',
+        display_name='Kettlebell Halo',
+        category=MovementCategory.FUNCTIONAL,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'KB Halo',
+            'KB Halos',
+            'Kettlebell Halo',
+            'Kettlebell Halos',
+            'Alt. KB Halos',
+        ),
+        aliases=('kb halo',),
+        movement_patterns=(),
+        muscle_groups=(MuscleGroup.SHOULDERS,),
+        is_crossfit_movement=False,
+        notes='Controlled kettlebell movement around the head.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='glute_bridge',
+        display_name='Glute Bridge',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Glute Bridge',
+            'Glute Bridges',
+            'Single Leg Glute Bridge',
+            'Single Leg Glute Bridges',
+        ),
+        aliases=('glute bridge',),
+        movement_patterns=(MovementPattern.HINGE,),
+        muscle_groups=(MuscleGroup.GLUTES,),
+        is_crossfit_movement=False,
+        notes='Supine hip extension, including single-leg execution.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='tibialis_raise',
+        display_name='Tibialis Raise',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Tibialis Raise',
+            'Tibialis Raises',
+        ),
+        aliases=('tibialis raise',),
+        movement_patterns=(),
+        muscle_groups=(),
+        is_crossfit_movement=False,
+        notes='Ankle dorsiflexion; tibialis muscle is not represented in the current muscle enum.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='pogo_jump',
+        display_name='Pogo Jump',
+        category=MovementCategory.FUNCTIONAL,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Pogo Jump',
+            'Pogo Jumps',
+        ),
+        aliases=('pogo jump',),
+        movement_patterns=(MovementPattern.LOCOMOTION,),
+        muscle_groups=(MuscleGroup.CALVES,),
+        is_crossfit_movement=False,
+        notes='Repeated ankle-driven jumps.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='broad_jump',
+        display_name='Broad Jump',
+        category=MovementCategory.FUNCTIONAL,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Broad Jump',
+            'Broad Jumps',
+            'Standing Broad Jump',
+        ),
+        aliases=('broad jump',),
+        movement_patterns=(MovementPattern.SQUAT, MovementPattern.LOCOMOTION),
+        muscle_groups=(MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES, MuscleGroup.CALVES),
+        is_crossfit_movement=False,
+        notes='Standing horizontal jump, without a burpee.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='lateral_jump',
+        display_name='Lateral Jump',
+        category=MovementCategory.FUNCTIONAL,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Lateral Jump',
+            'Lateral Jumps',
+            'Lateral Jumps Over PVC',
+        ),
+        aliases=('lateral jump',),
+        movement_patterns=(MovementPattern.LOCOMOTION,),
+        muscle_groups=(MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES, MuscleGroup.CALVES),
+        is_crossfit_movement=False,
+        notes='Sideways jump, including jumps over a PVC pipe.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='inchworm',
+        display_name='Inchworm',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Inchworm',
+            'Inchworms',
+            'Inch Worm',
+            'Inch Worms',
+        ),
+        aliases=('inchworm',),
+        movement_patterns=(),
+        muscle_groups=(MuscleGroup.CORE,),
+        is_crossfit_movement=False,
+        notes='Walkout warm-up drill.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='shoulder_dislocate',
+        display_name='Shoulder Dislocate',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Shoulder Dislocate',
+            'Shoulder Dislocates',
+            'Shoulder Pass Through',
+            'PVC Pass Through',
+        ),
+        aliases=('shoulder dislocate',),
+        movement_patterns=(),
+        muscle_groups=(),
+        is_crossfit_movement=False,
+        notes='Shoulder mobility drill; no strength load pattern assigned.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='front_rack_elbow_raise',
+        display_name='Front Rack Elbow Raise',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Front Rack Elbow Raise',
+            'Front Rack Elbow Raises',
+        ),
+        aliases=('front rack elbow raise',),
+        movement_patterns=(),
+        muscle_groups=(),
+        is_crossfit_movement=False,
+        notes='Front rack mobility drill.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='bottom_squat_rotation',
+        display_name='Bottom Squat Rotation',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Bottom Squat Rotation',
+            'Bottom Squat Rotations',
+        ),
+        aliases=('bottom squat rotation',),
+        movement_patterns=(),
+        muscle_groups=(),
+        is_crossfit_movement=False,
+        notes='Rotation mobility drill in a deep squat position.',
+    )
+)
+
+register(
+    Movement(
+        movement_id='cobra_downward_dog',
+        display_name='Cobra / Downward Dog',
+        category=MovementCategory.GYMNASTICS,
+        minimum_level=AthleteLevel.BEGINNER,
+        variants=(
+            'Cobra + Dach',
+            'Cobra and Downward Dog',
+            'Cobra / Dach',
+        ),
+        aliases=('cobra + dach',),
+        movement_patterns=(),
+        muscle_groups=(),
+        is_crossfit_movement=False,
+        notes='Alternating cobra and downward dog mobility sequence.',
+    )
+)
 
 # Freeze movement collection
 MOVEMENTS = tuple(MOVEMENTS)

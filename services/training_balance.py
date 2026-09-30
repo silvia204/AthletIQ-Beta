@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
+
+from services.movement_registry import AthleteLevel, movements_for_level
 
 
 GOAL_ALIASES = {
@@ -522,8 +524,13 @@ def evaluate_skill_movements(
     sessions_14: int,
     previous_sessions_14: int,
     dimension: str = "crossfit_movements",
+    expected_keys: Iterable[str] = (),
+    allowed_keys: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
     keys = set(counts_28) | set(counts_14) | set(previous_14)
+    keys.update(expected_keys)
+    if allowed_keys is not None:
+        keys.intersection_update(allowed_keys)
     if dimension == "hyrox_skills":
         # HYROX has a fixed race structure. Seed all nine skills so missing
         # stations remain visible instead of disappearing from the analysis.
@@ -619,8 +626,35 @@ def build_training_balance(
     trend_analysis: Mapping[str, Any],
     *,
     primary_goal: str | None = None,
+    athlete_level: str | AthleteLevel | None = None,
 ) -> dict[str, Any]:
     goal = _normalize_goal(primary_goal)
+    expected_crossfit_keys: set[str] = set()
+    allowed_crossfit_keys: set[str] | None = None
+    if goal == "crossfit" and athlete_level:
+        raw_level = str(getattr(athlete_level, "value", athlete_level)).strip().casefold()
+        matched_level = next(
+            (level for level in AthleteLevel if level.value.casefold() == raw_level),
+            None,
+        )
+        if matched_level is None:
+            matched_level = {
+                "anfänger": AthleteLevel.BEGINNER,
+                "anfaenger": AthleteLevel.BEGINNER,
+                "anfänger (beginner)": AthleteLevel.BEGINNER,
+                "intermediate": AthleteLevel.SCALED,
+                "fortgeschritten": AthleteLevel.SCALED,
+                "fortgeschritten (intermediate)": AthleteLevel.SCALED,
+                "experte": AthleteLevel.ADVANCED,
+                "elite": AthleteLevel.ADVANCED,
+                "experte / elite (advanced)": AthleteLevel.ADVANCED,
+            }.get(raw_level)
+        if matched_level is not None:
+            expected_crossfit_keys = {
+                movement.movement_id
+                for movement in movements_for_level(matched_level)
+            }
+            allowed_crossfit_keys = expected_crossfit_keys
     windows = trend_analysis.get("windows", {}) or {}
     window_14 = windows.get("14_days", {}) or {}
     window_28 = windows.get("28_days", {}) or {}
@@ -692,6 +726,8 @@ def build_training_balance(
             previous_14=crossfit_previous_14,
             sessions_14=sessions_14,
             previous_sessions_14=previous_sessions_14,
+            expected_keys=expected_crossfit_keys,
+            allowed_keys=allowed_crossfit_keys,
         )
 
         hyrox_28 = window_28.get("hyrox_skills", {}) or {}

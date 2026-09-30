@@ -700,7 +700,7 @@ def render_balance_dimension(
 def render_crossfit_movements(
     items: list[dict[str, Any]],
     *,
-    max_rows: int = 15,
+    max_rows: int | None = None,
 ) -> None:
     """Rendert CrossFit-Skills als relativen 14-Tage-Historienvergleich."""
 
@@ -710,7 +710,7 @@ def render_crossfit_movements(
         st.info("In diesem Zeitraum wurden keine CrossFit Skills erkannt.")
         return
 
-    visible_items = items[:max_rows]
+    visible_items = items if max_rows is None else items[:max_rows]
 
     table = pd.DataFrame(
         [
@@ -1856,6 +1856,7 @@ with tab0:
         status_training_balance = build_training_balance(
             trend_analysis,
             primary_goal=sportart,
+            athlete_level=level,
         )
 
         status_readiness = status_training_analysis.readiness
@@ -1923,7 +1924,7 @@ with tab0:
 
 with tab0:
     if st.session_state.get("workout_entry_requested", False) and user_profile is not None:
-        st.markdown("---")
+        #st.markdown("---")
         top_left, top_right = st.columns([4, 1])
         with top_left:
             st.markdown("## Neues Training")
@@ -1953,7 +1954,7 @@ with tab0:
             "verletzungen"
         ] = injuries.strip()
 
-        st.markdown("---")
+        #st.markdown("---")
 
         if not user_name:
             st.info(
@@ -2092,7 +2093,7 @@ with tab0:
             )
 
             if current_workout:
-                st.markdown("---")
+                #st.markdown("---")
                 st.write(
                     "### Aktuell erfasstes Training"
                 )
@@ -2148,7 +2149,7 @@ with tab0:
                                 }
                                 st.rerun()
 
-                st.markdown("---")
+                #st.markdown("---")
                 st.subheader(
                     "Wie hat es sich angefühlt?"
                 )
@@ -2195,18 +2196,20 @@ with tab0:
                 )
                 st.session_state["aktuelles_rpe"] = int(rpe)
 
-                workout_comment = st.text_input(
-                    "Kommentar zum Workout oder zur Tagesform",
-                    placeholder=(
-                        "z. B. Beine waren ab Runde 3 "
-                        "schwer, Puls ungewöhnlich hoch "
-                        "oder sehr gute Tagesform"
-                    ),
-                    key="training_comment_input",
-                )
-                st.session_state["workout_kommentar"] = workout_comment.strip()
+            #    workout_comment = st.text_input(
+            #        "Kommentar zum Workout oder zur Tagesform",
+            #        placeholder=(
+            #            "z. B. Beine waren ab Runde 3 "
+            #            "schwer, Puls ungewöhnlich hoch "
+            #            "oder sehr gute Tagesform"
+            #        ),
+            #        key="training_comment_input",
+            #    )
+            #    st.session_state["workout_kommentar"] = workout_comment.strip()
 
-                st.markdown("---")
+                st.session_state["workout_kommentar"] = "" 
+
+                #st.markdown("---")
                 st.subheader("💾 Training dauerhaft sichern")
 
                 save_notice = st.session_state.get("save_notice")
@@ -2233,7 +2236,7 @@ with tab0:
                         st.caption(gsheets_error)
 
                 if st.button(
-                    "🚀 Workout in Google Sheets speichern",
+                    "🚀 Workout speichern",
                     disabled=conn is None,
                     type="primary",
                     width="stretch",
@@ -2435,6 +2438,7 @@ with tab2:
         training_balance = build_training_balance(
             trend_analysis,
             primary_goal=user_sport,
+            athlete_level=user_level,
         )
 
         training_analysis = analyze_history(
@@ -3348,6 +3352,7 @@ with tab4:
     training_balance = build_training_balance(
         analysis_trend_analysis,
         primary_goal=analysis_user_sport,
+        athlete_level=st.session_state.get("athleten_level"),
     )
 
     analysis_trend_block = analysis_trend_analysis.get("trends", {})
@@ -3581,7 +3586,6 @@ with tab4:
 
             render_crossfit_movements(
                 crossfit_items,
-                max_rows=15,
             )
 
         elif str(analysis_user_sport).strip().casefold() == "hyrox":
